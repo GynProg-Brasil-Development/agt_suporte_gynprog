@@ -12,10 +12,16 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2,
       "position": [
-        -80,
-        128
+        1328,
+        64
       ],
-      "notesInFlow": "FIXED v5.003: Usando prepared statement para prevenir SQL injection"
+      "notesInFlow": "FIXED v5.003: Usando prepared statement para prevenir SQL injection",
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
@@ -28,14 +34,22 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2,
       "position": [
-        -80,
-        320
+        1328,
+        256
       ],
-      "notesInFlow": "FIXED v5.003: Prepared statement + limite parametrizado"
+      "notesInFlow": "FIXED v5.003: Prepared statement + limite parametrizado",
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
-        "resource": "embedding",
+        "resource": "chat",
+        "model": "gpt-4.1",
+        "options": {},
         "requestOptions": {}
       },
       "id": "68370a0e-eab7-42f2-a3aa-5baf7b00812e",
@@ -43,10 +57,16 @@
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1,
       "position": [
-        -304,
-        728
+        1104,
+        592
       ],
-      "notesInFlow": "FIXED v5.004: Adicionado campo text para embedding\nv5.003: Considerar cache para mensagens similares"
+      "notesInFlow": "FIXED v5.004: Adicionado campo text para embedding\nv5.003: Considerar cache para mensagens similares",
+      "credentials": {
+        "openAiApi": {
+          "id": "iUiB0O7I8X0xfIfu",
+          "name": "OpenAi account"
+        }
+      }
     },
     {
       "parameters": {
@@ -70,10 +90,16 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -80,
-        608
+        1328,
+        448
       ],
-      "notesInFlow": "\nv5.003: Recomenda-se mover URL para variável de ambiente"
+      "notesInFlow": "\nv5.003: Recomenda-se mover URL para variável de ambiente",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1v1vzFPQj8xMt3ix",
+          "name": "Header Auth account 2"
+        }
+      }
     },
     {
       "parameters": {
@@ -97,30 +123,16 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -80,
-        800
+        1328,
+        640
       ],
-      "notesInFlow": "\nv5.003: Recomenda-se mover URL para variável de ambiente"
-    },
-    {
-      "parameters": {
-        "resource": "chat",
-        "model": "gpt-4o-mini",
-        "options": {
-          "maxTokens": 500,
-          "temperature": 0.7
-        },
-        "requestOptions": {}
-      },
-      "id": "92d84029-2fbf-471f-9f1f-775afe9ce7c2",
-      "name": "GPT-4: Gerar Resposta",
-      "type": "n8n-nodes-base.openAi",
-      "typeVersion": 1,
-      "position": [
-        368,
-        248
-      ],
-      "notesInFlow": "FIXED v5.005: Prompt atualizado para usar dados consolidados do Merge Contextos\nv5.004: Configurado resource=chat com mensagens e contexto completo\nPrompt v2025-02-15\nSystem: Você é um agente de suporte da Gynprog, responde em PT-BR, mantendo tom profissional e empático.\nUser template: mensagem normalizada, memória do cliente, últimos contatos e trechos da base de conhecimento.\nInstruções: confirmar entendimento, citar dados apenas se presentes nas fontes e sinalizar limitações quando ocorrerem."
+      "notesInFlow": "\nv5.003: Recomenda-se mover URL para variável de ambiente",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1v1vzFPQj8xMt3ix",
+          "name": "Header Auth account 2"
+        }
+      }
     },
     {
       "parameters": {
@@ -137,10 +149,16 @@
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1,
       "position": [
-        592,
-        128
+        2000,
+        304
       ],
-      "notesInFlow": "FIXED v5.004: Configurado resource=chat com prompt de consolidação de memória\nPrompt v2025-02-15\nInstrui o modelo a consolidar memória do cliente (resumo, pendências, tópicos e sentimento) sem duplicar itens."
+      "notesInFlow": "FIXED v5.004: Configurado resource=chat com prompt de consolidação de memória\nPrompt v2025-02-15\nInstrui o modelo a consolidar memória do cliente (resumo, pendências, tópicos e sentimento) sem duplicar itens.",
+      "credentials": {
+        "openAiApi": {
+          "id": "iUiB0O7I8X0xfIfu",
+          "name": "OpenAi account"
+        }
+      }
     },
     {
       "parameters": {
@@ -151,8 +169,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        816,
-        128
+        2224,
+        304
       ],
       "notesInFlow": "NOVO v5.004: Processa resposta JSON do GPT-4 Atualizar Memoria"
     },
@@ -167,10 +185,16 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2,
       "position": [
-        1040,
-        128
+        2448,
+        304
       ],
-      "notesInFlow": "FIXED v5.003: Prepared statement + arrays via jsonb"
+      "notesInFlow": "FIXED v5.003: Prepared statement + arrays via jsonb",
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
@@ -183,8 +207,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1936,
-        776
+        3440,
+        1104
       ]
     },
     {
@@ -194,8 +218,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        -752,
-        392
+        656,
+        448
       ],
       "id": "f5cb1002-0f03-48a0-9569-bae9cc3c6149",
       "name": "Normalizar Mensagem",
@@ -210,8 +234,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        -80,
-        1384
+        -464,
+        1120
       ]
     },
     {
@@ -228,11 +252,11 @@
             },
             {
               "name": "config.phone_number_id",
-              "value": "={{ $env.META_PHONE_NUMBER_ID || '' }}"
+              "value": "825833630621869"
             },
             {
               "name": "config.access_token",
-              "value": "={{ $env.META_WABA_TOKEN || '' }}"
+              "value": "EAAW6NJLCMuEBQOZBaXdDSbO7fsGpLsYg4Jw3gKWjw8LSLeuFsSrkOuikRd2r88eq7ZAF5aPcTgV0ee3616DG0IlyskDWaM48SsyehRFTGZCV7J2lP1Tm3GujuBcgRUeIi8dnVZB6IrApCJZBWjU8ZAyZC8Ix87VVDmfa82rhRcMZAXPbxuTsWhi34IcmLaBq6wcc0AZDZD"
             },
             {
               "name": "config.verify_token",
@@ -240,7 +264,7 @@
             },
             {
               "name": "config.app_secret",
-              "value": "={{ $env.META_APP_SECRET || '' }}"
+              "value": "66eb81da246542445efb2c2bb3f921da"
             },
             {
               "name": "config.base_url",
@@ -263,21 +287,21 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 1,
       "position": [
-        -528,
-        1288
+        -912,
+        1024
       ]
     },
     {
       "parameters": {
-        "functionCode": "// ✅ VALIDAÇÃO HMAC SHA256 - Meta WhatsApp\n// crypto já está disponível globalmente no n8n - NÃO importar!\n\nconst items = $input.all();\n\nreturn items.map(item => {\n  const config = item.json.config;\n  const rawBody = item.json.raw_body;\n  const headerSignature = item.json.headers['x-hub-signature-256'];\n  \n  // Validações básicas\n  if (!config?.app_secret) {\n    return {\n      json: {\n        ...item.json,\n        signature: {\n          valid: false,\n          reason: 'META_APP_SECRET não configurado',\n          header: headerSignature || 'missing',\n          expected: null\n        }\n      }\n    };\n  }\n  \n  if (!rawBody) {\n    return {\n      json: {\n        ...item.json,\n        signature: {\n          valid: false,\n          reason: 'raw_body ausente',\n          header: headerSignature || 'missing',\n          expected: null\n        }\n      }\n    };\n  }\n  \n  if (!headerSignature) {\n    return {\n      json: {\n        ...item.json,\n        signature: {\n          valid: false,\n          reason: 'Header X-Hub-Signature-256 ausente',\n          header: 'missing',\n          expected: null\n        }\n      }\n    };\n  }\n  \n  // Calcular HMAC SHA256\n  const hmac = crypto.createHmac('sha256', config.app_secret);\n  hmac.update(rawBody, 'utf8');\n  const expectedSignature = 'sha256=' + hmac.digest('hex');\n  \n  // Comparação segura (timing-safe)\n  const valid = crypto.timingSafeEqual(\n    Buffer.from(headerSignature),\n    Buffer.from(expectedSignature)\n  );\n  \n  return {\n    json: {\n      ...item.json,\n      signature: {\n        valid: valid,\n        reason: valid ? 'Assinatura válida' : 'Assinatura inválida - possível tentativa de spoofing',\n        header: headerSignature,\n        expected: expectedSignature\n      }\n    }\n  };\n});"
+        "functionCode": "// ✅ VALIDAÇÃO HMAC SHA256 - Meta WhatsApp (sem módulo crypto)\n\nconst items = $input.all();\n\nfunction buildResult(item, extra) {\n  return {\n    json: {\n      ...item.json,\n      signature: {\n        valid: extra.valid,\n        reason: extra.reason,\n        header: extra.header ?? null,\n        expected: extra.expected ?? null,\n      },\n    },\n  };\n}\n\nreturn items.map((item) => {\n  const json = item.json || {};\n  const config = json.config || {};\n  const rawBody = json.raw_body;\n  const headerSignature = json.headers?.['x-hub-signature-256'];\n  const hmacHex = json.expected_signature_hmac;\n\n  // Validações básicas\n  if (!config.app_secret) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'META_APP_SECRET não configurado',\n      header: headerSignature || 'missing',\n      expected: null,\n    });\n  }\n\n  if (!rawBody) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'raw_body ausente',\n      header: headerSignature || 'missing',\n      expected: null,\n    });\n  }\n\n  if (!headerSignature) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'Header X-Hub-Signature-256 ausente',\n      header: 'missing',\n      expected: null,\n    });\n  }\n\n  if (!hmacHex) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'Assinatura esperada (HMAC) não calculada',\n      header: headerSignature,\n      expected: null,\n    });\n  }\n\n  const expectedSignature = 'sha256=' + String(hmacHex).trim().toLowerCase();\n  const candidate = String(headerSignature).trim().toLowerCase();\n\n  const valid =\n    candidate.length === expectedSignature.length &&\n    candidate === expectedSignature;\n\n  return buildResult(item, {\n    valid,\n    reason: valid ? 'Assinatura válida' : 'Assinatura inválida',\n    header: headerSignature,\n    expected: expectedSignature,\n  });\n});\n"
       },
       "id": "cba2347d-fec3-47e9-b799-adb33a1c6499",
       "name": "Validar Assinatura",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        144,
-        1384
+        -16,
+        1120
       ]
     },
     {
@@ -289,8 +313,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1264,
-        776
+        2768,
+        1296
       ]
     },
     {
@@ -302,8 +326,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1264,
-        968
+        2768,
+        912
       ]
     },
     {
@@ -315,8 +339,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1264,
-        584
+        2768,
+        1104
       ]
     },
     {
@@ -328,8 +352,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1040,
-        392
+        2544,
+        720
       ]
     },
     {
@@ -341,8 +365,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1264,
-        392
+        2768,
+        720
       ]
     },
     {
@@ -354,8 +378,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1488,
-        776
+        2992,
+        1104
       ]
     },
     {
@@ -367,8 +391,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        1712,
-        776
+        3216,
+        1104
       ]
     },
     {
@@ -383,10 +407,13 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -752,
-        1288
+        -1136,
+        1024
       ],
-      "webhookId": "6c01cb74-bb50-4e48-8e13-aae11077cc9d"
+      "webhookId": "6c01cb74-bb50-4e48-8e13-aae11077cc9d",
+      "alwaysOutputData": false,
+      "notesInFlow": false,
+      "executeOnce": false
     },
     {
       "parameters": {
@@ -399,13 +426,12 @@
           },
           "conditions": [
             {
-              "id": "method-check",
+              "id": "064f1d61-717e-4697-a7f1-b61ea0db630b",
               "leftValue": "={{ ($json.method || $json.req?.method || 'POST').toUpperCase() }}",
               "rightValue": "GET",
               "operator": {
                 "type": "string",
-                "operation": "equals",
-                "name": "filter.operator.equals"
+                "operation": "equals"
               }
             }
           ],
@@ -416,8 +442,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -304,
-        1288
+        -688,
+        1024
       ],
       "id": "e8617faf-820d-481f-91e0-8c38fee66062",
       "name": "If"
@@ -441,21 +467,21 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        144,
-        1192
+        -240,
+        928
       ],
       "id": "1a711df2-0321-4cc5-a725-8bac681f3187",
       "name": "Respond to Webhook1"
     },
     {
       "parameters": {
-        "jsCode": "\nconst verifyToken = $input.item.json.query['hub.verify_token'];\nconst challenge = $input.item.json.query['hub.challenge'];\nconst expectedToken = $input.item.json.config?.verify_token || $env.META_VERIFY_TOKEN || '';\n\nif (verifyToken && expectedToken && verifyToken === expectedToken) {\n  return [{ json: { challenge } }];\n}\n\nthrow new Error('Token de verificação inválido');\n"
+        "jsCode": "const q = $input.item.json.query || {};\nconst verifyToken   = q['hub.verify_token'] || '';\nconst challenge     = q['hub.challenge'] || '';\nconst expectedToken = $input.item.json.config?.verify_token || $env.META_VERIFY_TOKEN || '';\n\nif (verifyToken && expectedToken && verifyToken === expectedToken && challenge) {\n  // Handshake GET: devolve só o challenge\n  return [{ json: { challenge } }];\n}\n\n// Se não veio verify_token, não é handshake: devolve o próprio input sem erro\nreturn $input.all();\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -80,
-        1192
+        -464,
+        928
       ],
       "id": "bcd47326-b724-426b-996e-73295e7967d6",
       "name": "Code in JavaScript"
@@ -469,8 +495,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        592,
-        320
+        2096,
+        624
       ]
     },
     {
@@ -483,8 +509,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 2,
       "position": [
-        816,
-        392
+        2320,
+        720
       ]
     },
     {
@@ -494,8 +520,8 @@
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
-        -752,
-        1608
+        -1136,
+        1536
       ],
       "notesInFlow": "NOVO v5.003: Captura e trata erros do workflow"
     },
@@ -508,8 +534,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        -528,
-        1608
+        -912,
+        1536
       ]
     },
     {
@@ -525,8 +551,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        -304,
-        1608
+        -688,
+        1536
       ]
     },
     {
@@ -538,8 +564,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        -528,
-        392
+        880,
+        448
       ],
       "notesInFlow": "NOVO v5.003: Rate limiting (implementação básica, requer Redis para produção)"
     },
@@ -552,8 +578,8 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        144,
-        248
+        1552,
+        448
       ],
       "notesInFlow": "NOVO v5.005: Mescla 4 contextos paralelos antes do GPT-4"
     },
@@ -572,8 +598,54 @@
                 "conditions": [
                   {
                     "id": "f798a00a-c8e1-4abe-bf0a-ee0272514b8c",
-                    "leftValue": "=\n",
-                    "rightValue": "",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2b89fc0c-cdaf-402e-b5b9-be0d1684064b",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}\n",
+                    "rightValue": "status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "784e7dfe-0580-49a6-9cdd-52560e318f35",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}\n",
+                    "rightValue": "other",
                     "operator": {
                       "type": "string",
                       "operation": "equals",
@@ -591,8 +663,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.3,
       "position": [
-        592,
-        1384
+        432,
+        912
       ],
       "id": "e407bb2b-84fe-4cd0-8c26-155191dfa0fa",
       "name": "Roteamento Evento"
@@ -611,13 +683,14 @@
                 },
                 "conditions": [
                   {
+                    "id": "250284d5-0b71-462d-912f-793b1927ddda",
                     "leftValue": "={{$json.signature?.valid ? 'valid' : 'invalid'}}\n",
-                    "rightValue": "",
+                    "rightValue": "valid",
                     "operator": {
                       "type": "string",
-                      "operation": "equals"
-                    },
-                    "id": "0e0e45be-fd3f-4650-99d6-1253339df8b2"
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
                   }
                 ],
                 "combinator": "and"
@@ -633,9 +706,9 @@
                 },
                 "conditions": [
                   {
-                    "id": "d5f1c5ff-9c64-4723-90af-216e74751261",
-                    "leftValue": "",
-                    "rightValue": "",
+                    "id": "e54d94cd-c9a6-4b5a-b7f8-0bc007acc070",
+                    "leftValue": "={{$json.signature?.valid ? 'valid' : 'invalid'}}\n",
+                    "rightValue": "invalid",
                     "operator": {
                       "type": "string",
                       "operation": "equals",
@@ -653,14 +726,79 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.3,
       "position": [
-        368,
-        1384
+        208,
+        1120
       ],
       "id": "0bfc0c03-871c-44f1-bff3-bcb1f73bb79a",
       "name": "Roteamento Assinatura"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4.1",
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.2
+        },
+        "requestOptions": {}
+      },
+      "id": "92d84029-2fbf-471f-9f1f-775afe9ce7c2",
+      "name": "GPT-4: Gerar Resposta",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        448
+      ],
+      "notesInFlow": "FIXED v5.005: Prompt atualizado para usar dados consolidados do Merge Contextos\nv5.004: Configurado resource=chat com mensagens e contexto completo\nPrompt v2025-02-15\nSystem: Você é um agente de suporte da Gynprog, responde em PT-BR, mantendo tom profissional e empático.\nUser template: mensagem normalizada, memória do cliente, últimos contatos e trechos da base de conhecimento.\nInstruções: confirmar entendimento, citar dados apenas se presentes nas fontes e sinalizar limitações quando ocorrerem.",
+      "credentials": {
+        "openAiApi": {
+          "id": "iUiB0O7I8X0xfIfu",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "=={{ $json.raw_body }}",
+        "dataPropertyName": "expected_signature_hmac",
+        "secret": "=={{ $json.config.app_secret }}"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        1120
+      ],
+      "id": "62607822-d6e9-42b1-bc9d-a7315058fbc4",
+      "name": "Crypto"
     }
   ],
-  "pinData": {},
+  "pinData": {
+    "Error Handler v5.003": [
+      {
+        "json": {
+          "execution": {
+            "id": 231,
+            "url": "http://webhook.gynprogdev.com.br:5678/execution/workflow/1/231",
+            "retryOf": "34",
+            "error": {
+              "message": "Example Error Message",
+              "stack": "Stacktrace"
+            },
+            "lastNodeExecuted": "Node With Error",
+            "mode": "manual"
+          },
+          "workflow": {
+            "id": "1",
+            "name": "Example Workflow"
+          }
+        }
+      }
+    ]
+  },
   "connections": {
     "Meta: Webhook": {
       "main": [
@@ -670,7 +808,8 @@
             "type": "main",
             "index": 0
           }
-        ]
+        ],
+        []
       ]
     },
     "Carregar Config Meta": {
@@ -717,7 +856,7 @@
       "main": [
         [
           {
-            "node": "Validar Assinatura",
+            "node": "Crypto",
             "type": "main",
             "index": 0
           }
@@ -793,22 +932,6 @@
           },
           {
             "node": "Pinecone: Knowledge Base (HTTP)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GPT-4: Gerar Resposta": {
-      "main": [
-        [
-          {
-            "node": "GPT-4: Atualizar Memoria",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Empacotar Resposta GPT",
             "type": "main",
             "index": 0
           }
@@ -971,7 +1094,27 @@
     },
     "Roteamento Evento": {
       "main": [
-        []
+        [
+          {
+            "node": "Normalizar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processar Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evento Desconhecido",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Respond to Webhook1": {
@@ -993,7 +1136,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Assinatura Invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "PostgreSQL: Mensagens Recentes": {
@@ -1028,6 +1177,33 @@
           }
         ]
       ]
+    },
+    "GPT-4: Gerar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Empacotar Resposta GPT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GPT-4: Atualizar Memoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto": {
+      "main": [
+        [
+          {
+            "node": "Validar Assinatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -1036,8 +1212,9 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "eced9a1a-676b-4071-800c-b3fe43fb397b",
+  "versionId": "4f6b4795-a695-4424-a4e8-0de640d747b4",
   "meta": {
+    "templateCredsSetupCompleted": true,
     "instanceId": "ff86a5bee6b26a4fe33e10fc3cf5e69a885b4933737382188c57b9f1d85f558c"
   },
   "id": "oKUnObFYTXNiPtaR",
