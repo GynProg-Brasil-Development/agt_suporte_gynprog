@@ -1,0 +1,1150 @@
+{
+  "name": "agt_suporte_gynprog_v5.008",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM gynprog_support.client_memory WHERE client_id = '{{$json.client_id}}'",
+        "options": {}
+      },
+      "id": "9bc6039d-fdab-4eb1-bd36-41710ff6d1b2",
+      "name": "PostgreSQL: Buscar Memoria",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT client_id, content, timestamp, direction FROM gynprog_support.messages WHERE client_id = '{{$json.client_id}}' ORDER BY timestamp DESC LIMIT {{ $json.limit || 20 }}",
+        "options": {}
+      },
+      "id": "cd5993a9-62b8-4afe-851c-65b54ae54f52",
+      "name": "PostgreSQL: Mensagens Recentes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        192
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "embeddings",
+        "requestOptions": {}
+      },
+      "id": "278b96d7-18f8-41ec-b073-f4a90e114abc",
+      "name": "OpenAI: Embedding",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        528
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "iUiB0O7I8X0xfIfu",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PINECONE_URL }}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($json.embedding) }},\n  \"topK\": 3,\n  \"namespace\": \"client_history\",\n  \"filter\": {\n    \"client_id\": {{ $item(0).$node[\"Normalizar Mensagem\"].json.client_id }}\n  },\n  \"includeMetadata\": true\n}",
+        "options": {}
+      },
+      "id": "9ab72fac-8a88-48a0-8927-35230ab6ff5d",
+      "name": "Pinecone: Historico (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -416,
+        384
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1v1vzFPQj8xMt3ix",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PINECONE_URL }}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($json.embedding) }},\n  \"topK\": 5,\n  \"namespace\": \"gynprog_knowledge\",\n  \"includeMetadata\": true\n}",
+        "options": {}
+      },
+      "id": "bb2a0335-7b6b-43f6-8e6b-f70e5512dbbd",
+      "name": "Pinecone: Knowledge Base (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -416,
+        576
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1v1vzFPQj8xMt3ix",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o-mini",
+        "options": {
+          "maxTokens": 800,
+          "temperature": 0.3
+        },
+        "requestOptions": {}
+      },
+      "id": "d2ec9b01-1a5e-4809-b1ac-a8312cbdc50d",
+      "name": "GPT-4: Atualizar Memoria",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        256,
+        240
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "iUiB0O7I8X0xfIfu",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = [];\nfor (const item of items) {\n  try {\n    const content = item.json.choices?.[0]?.message?.content || '{}';\n    let memoryData;\n    try {\n      memoryData = typeof content === 'string' ? JSON.parse(content) : content;\n    } catch (parseError) {\n      console.error('Erro ao parsear JSON da memória:', parseError);\n      memoryData = { conversation_summary: '', new_resolved_issues: [], new_pending_issues: [], key_topics: [], sentiment: 'neutral' };\n    }\n    const normalized = {\n      conversation_summary: memoryData.conversation_summary || '',\n      new_resolved_issues: Array.isArray(memoryData.new_resolved_issues) ? memoryData.new_resolved_issues : [],\n      new_pending_issues: Array.isArray(memoryData.new_pending_issues) ? memoryData.new_pending_issues : [],\n      key_topics: Array.isArray(memoryData.key_topics) ? memoryData.key_topics : [],\n      sentiment: memoryData.sentiment || 'neutral'\n    };\n    results.push({ json: normalized });\n  } catch (error) {\n    console.error('Erro ao processar memória:', error);\n    results.push({ json: { conversation_summary: '', new_resolved_issues: [], new_pending_issues: [], key_topics: [], sentiment: 'neutral' } });\n  }\n}\nreturn results;"
+      },
+      "id": "27f5614d-9098-4874-b02a-d2e05769e039",
+      "name": "Processar Memoria JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gynprog_support.client_memory \n(client_id, conversation_summary, resolved_issues, pending_issues, key_topics, sentiment, last_updated)\nVALUES ($1, $2, $3::text[], $4::text[], $5::text[], $6, NOW())\nON CONFLICT (client_id) DO UPDATE SET\n  conversation_summary = EXCLUDED.conversation_summary,\n  resolved_issues = EXCLUDED.resolved_issues || client_memory.resolved_issues,\n  pending_issues = EXCLUDED.pending_issues,\n  key_topics = EXCLUDED.key_topics,\n  sentiment = EXCLUDED.sentiment,\n  last_updated = NOW()",
+        "options": {}
+      },
+      "id": "79f2f66b-c90d-4e05-9931-d79f3ed140c9",
+      "name": "PostgreSQL: Salvar Memoria",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        704,
+        240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: $json.meta?.response?.status || 'ok', latency_ms: $json.meta?.latency_ms || 0, route: $json.meta?.route || 'unknown' } }}",
+        "options": {
+          "responseCode": "={{ $json.meta?.http_status || 200 }}"
+        }
+      },
+      "id": "eb93b559-62fd-4033-bf8d-f4a4229c3f98",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "function sanitizeString(str, maxLength = 500) {\n  if (typeof str !== 'string') return '';\n  return str.trim().slice(0, maxLength);\n}\nfunction sanitizePhoneNumber(phone) {\n  if (!phone) return '';\n  const cleaned = String(phone).replace(/[^0-9]/g, '');\n  return cleaned.slice(0, 20);\n}\nfunction extractContactInfo(value) {\n  const contacts = value.contacts || [];\n  const contact = contacts[0] || {};\n  const name = sanitizeString(contact.profile?.name || contact.profile?.Name || contact.name || 'Contato Meta');\n  const waId = sanitizePhoneNumber(contact.wa_id);\n  return { name, waId };\n}\nfunction extractMessageText(message) {\n  const messageType = message.type || 'text';\n  let text = '';\n  try {\n    switch (messageType) {\n      case 'text': text = message.text?.body || ''; break;\n      case 'interactive':\n        const interactive = message.interactive || {};\n        if (interactive.type === 'list_reply') text = interactive.list_reply?.title || interactive.list_reply?.description || '';\n        else if (interactive.type === 'button_reply') text = interactive.button_reply?.title || interactive.button_reply?.id || '';\n        break;\n      case 'button': text = message.button?.text || ''; break;\n      case 'reaction': text = message.reaction?.emoji || ''; break;\n      case 'image': case 'video': case 'audio': case 'document':\n        text = message[messageType]?.caption || message[messageType]?.filename || '';\n        break;\n      default: text = '';\n    }\n  } catch (error) { text = ''; }\n  return text || `[${messageType} sem texto]`;\n}\nfunction createTimestamp(messageTimestamp) {\n  try {\n    const timestampSeconds = Number(messageTimestamp || Date.now() / 1000);\n    if (Number.isNaN(timestampSeconds)) return new Date().toISOString();\n    return new Date(timestampSeconds * 1000).toISOString();\n  } catch (error) { return new Date().toISOString(); }\n}\nfunction validateEvent(item) {\n  if (!item || !item.json) throw new Error('Item inválido: estrutura JSON ausente');\n  const event = item.json.event || {};\n  const messages = event.messages;\n  if (!Array.isArray(messages) || messages.length === 0) {\n    console.warn('Evento sem mensagens válidas');\n    return false;\n  }\n  return true;\n}\nconst results = [];\nconst errors = [];\nfor (let i = 0; i < items.length; i++) {\n  try {\n    if (!validateEvent(items[i])) continue;\n    const base = items[i].json || {};\n    const config = base.config || {};\n    const value = base.event || {};\n    const messages = value.messages || [];\n    const metaBase = { ...(base.meta || {}) };\n    metaBase.environment = config.meta_env || metaBase.environment || 'sandbox';\n    metaBase.provider = 'meta';\n    metaBase.version = 'v5.008';\n    const { name: contactName, waId } = extractContactInfo(value);\n    for (const message of messages) {\n      try {\n        const senderWaId = sanitizePhoneNumber(message.from || waId);\n        if (!senderWaId) continue;\n        const isoTimestamp = createTimestamp(message.timestamp);\n        const messageType = sanitizeString(message.type || 'text', 50);\n        const text = sanitizeString(extractMessageText(message), 4000);\n        const meta = { ...metaBase };\n        meta.client_mask = senderWaId.slice(-4);\n        meta.route = 'meta_inbound';\n        meta.processed_at = new Date().toISOString();\n        const normalized = {\n          sender: senderWaId,\n          type: messageType,\n          text: text,\n          timestamp: isoTimestamp,\n          message_id: sanitizeString(message.id || '', 100),\n          context_id: sanitizeString(message.context?.id || '', 100),\n          raw: message,\n          config,\n          meta,\n          client_id: senderWaId,\n        };\n        results.push({\n          json: {\n            client_id: senderWaId,\n            client_name: contactName,\n            message_content: text,\n            message_type: messageType,\n            message_id: normalized.message_id,\n            timestamp: isoTimestamp,\n            direction: 'inbound',\n            channel: 'whatsapp:meta',\n            normalized,\n            meta,\n            config,\n            event: value,\n          },\n        });\n      } catch (messageError) {\n        errors.push({ stage: 'message_processing', message_id: message.id, error: messageError.message });\n      }\n    }\n  } catch (itemError) {\n    errors.push({ stage: 'item_processing', item_index: i, error: itemError.message });\n  }\n}\nif (results.length === 0) throw new Error('Nenhuma mensagem válida foi processada');\nreturn results;"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1088,
+        384
+      ],
+      "id": "17e10191-b65e-4864-8506-9e499555dd0c",
+      "name": "Normalizar Mensagem"
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = [];\nfor (const item of items) {\n  // Preferir raw body vindo em binário quando Webhook está com rawBody/binaryData\n  const binarySources = Object.values(item.binary || {});\n  let rawBody = '';\n  if (binarySources.length && binarySources[0]?.data) {\n    rawBody = Buffer.from(binarySources[0].data, 'base64').toString('utf8');\n  } else if (item.binary?.rawBody?.data) {\n    rawBody = Buffer.from(item.binary.rawBody.data, 'base64').toString('utf8');\n  } else if (typeof item.json.body === 'string') {\n    rawBody = item.json.body;\n  } else if (item.json.body !== undefined) {\n    try {\n      rawBody = JSON.stringify(item.json.body);\n    } catch (error) {\n      rawBody = '';\n    }\n  }\n\n  let parsedBody = null;\n  if (rawBody) {\n    try {\n      parsedBody = JSON.parse(rawBody);\n    } catch (error) {\n      parsedBody = null;\n    }\n  } else if (item.json.body && typeof item.json.body === 'object') {\n    parsedBody = item.json.body;\n  }\n\n  const entry = parsedBody?.entry?.[0] || {};\n  const change = entry.changes?.[0] || {};\n  const value = change.value || null;\n  const meta = {\n    start_at: Date.now(),\n    provider: 'meta',\n    channel: 'whatsapp',\n    environment: item.json.config?.meta_env || item.json.meta?.environment || null,\n    phone_number_id: value?.metadata?.phone_number_id || null,\n    display_phone_number: value?.metadata?.display_phone_number || null,\n  };\n\n  results.push({\n    json: {\n      meta,\n      headers: item.json.headers || {},\n      query: item.json.query || {},\n      raw_body: rawBody,\n      entry,\n      event: value,\n      method: item.json.httpMethod || item.json.method || 'POST',\n      config: item.json.config || {},\n    },\n  });\n}\nreturn results;"
+      },
+      "id": "db9a5246-5456-4da3-b1b4-f4f5d39c99c6",
+      "name": "Preparar Evento Meta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -2208,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nfunction buildResult(item, extra) {\n  return {\n    json: {\n      ...item.json,\n      signature: {\n        valid: extra.valid,\n        reason: extra.reason,\n        header: extra.header ?? null,\n        expected: extra.expected ?? null,\n      },\n    },\n  };\n}\nreturn items.map((item) => {\n  const json = item.json || {};\n  const config = json.config || {};\n  const rawBody = json.raw_body;\n  const headerSignature = json.headers?.['x-hub-signature-256'];\n  const hmacHex = json.expected_signature_hmac;\n  if (!config.app_secret) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'META_APP_SECRET não configurado',\n      header: headerSignature || 'missing',\n      expected: null,\n    });\n  }\n  if (!rawBody) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'raw_body ausente',\n      header: headerSignature || 'missing',\n      expected: null,\n    });\n  }\n  if (!headerSignature) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'Header X-Hub-Signature-256 ausente',\n      header: 'missing',\n      expected: null,\n    });\n  }\n  if (!hmacHex) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'Assinatura esperada (HMAC) não calculada',\n      header: headerSignature,\n      expected: null,\n    });\n  }\n  const expectedSignature = 'sha256=' + String(hmacHex).trim().toLowerCase();\n  const candidate = String(headerSignature).trim().toLowerCase();\n  const valid =\n    candidate.length === expectedSignature.length &&\n    candidate === expectedSignature;\n  return buildResult(item, {\n    valid,\n    reason: valid ? 'Assinatura válida' : 'Assinatura inválida',\n    header: headerSignature,\n    expected: expectedSignature,\n  });\n});"
+      },
+      "id": "d84ac9c7-28ef-4170-902f-67a1ffa81fde",
+      "name": "Validar Assinatura",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1760,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  meta.http_status = 401;\n  meta.route = 'meta_signature_invalid';\n  meta.success = false;\n  meta.response = { status: 'error', reason: 'invalid_signature' };\n  item.json.meta = meta;\n  return { json: item.json };\n});"
+      },
+      "id": "f563278a-ac21-48bd-88d1-82391dd2efe0",
+      "name": "Assinatura Invalida",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = [];\nfor (const item of items) {\n  const statuses = item.json.event?.statuses || [];\n  if (!statuses.length) {\n    const meta = item.json.meta || {};\n    meta.route = 'meta_status_empty';\n    meta.http_status = 200;\n    meta.success = true;\n    meta.response = { status: 'ignored' };\n    results.push({ json: { meta } });\n    continue;\n  }\n  for (const status of statuses) {\n    const meta = { ...(item.json.meta || {}) };\n    meta.route = 'meta_status';\n    meta.http_status = 200;\n    meta.success = status.status !== 'failed';\n    meta.response = {\n      status: status.status,\n      message_id: status.id || null,\n      conversation_id: status.conversation?.id || null,\n      timestamp: status.timestamp || null,\n    };\n    if (status.errors?.length) {\n      meta.error = status.errors[0].code || 'status_error';\n      meta.response.error = status.errors[0];\n      meta.success = false;\n    } else {\n      delete meta.error;\n    }\n    results.push({ json: { meta, status } });\n  }\n}\nreturn results;"
+      },
+      "id": "c4356603-4b57-4773-be4e-cd6a39daba93",
+      "name": "Processar Status",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  meta.route = 'meta_unknown_event';\n  meta.http_status = 200;\n  meta.success = true;\n  meta.response = { status: 'ignored', message: 'event-type-not-handled' };\n  item.json.meta = meta;\n  return { json: item.json };\n});"
+      },
+      "id": "ffe58e82-f820-4aca-be70-9d6fadb1166c",
+      "name": "Evento Desconhecido",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const inputMain = this.getInputData(0);\nconst inputContext = this.getInputData(1);\nconst outputs = [];\nfor (let index = 0; index < inputMain.length; index += 1) {\n  const gptItem = inputMain[index];\n  const contextItem = inputContext?.[index] || { json: {} };\n  const normalized = contextItem.json?.normalized || contextItem.json || {};\n  const config = normalized.config || {};\n  const meta = { ...(normalized.meta || {}) };\n  const gptChoice = gptItem.json?.choices?.[0]?.message?.content || '';\n  const cleanedText = (gptChoice || '').trim();\n  const templateHint = normalized.meta?.outbound_template || gptItem.json?.template || null;\n  const responseType = templateHint?.name || templateHint?.id ? 'template' : 'text';\n  const requestBody = {\n    messaging_product: 'whatsapp',\n    to: normalized.sender || normalized.client_id || '',\n  };\n  if (normalized.message_id) {\n    requestBody.context = { message_id: normalized.message_id };\n  }\n  if (responseType === 'template') {\n    const templateName = templateHint.name || templateHint.id;\n    const templateLanguage = templateHint.language || config.template_language || 'pt_BR';\n    const templateComponents = templateHint.components || (templateHint.params\n      ? [\n          {\n            type: 'body',\n            parameters: templateHint.params.map(param => ({ type: 'text', text: param })),\n          },\n        ]\n      : undefined);\n    requestBody.type = 'template';\n    requestBody.template = {\n      name: templateName,\n      language: { code: templateLanguage },\n    };\n    if (templateComponents) {\n      requestBody.template.components = templateComponents;\n    }\n  } else {\n    requestBody.type = 'text';\n    requestBody.text = {\n      preview_url: false,\n      body: cleanedText || '...'\n    };\n  }\n  const graphVersion = config.graph_version || 'v20.0';\n  const phoneNumberId = config.phone_number_id || '';\n  const baseUrl = config.base_url || `https://graph.facebook.com/${graphVersion}`;\n  const outbound = {\n    type: responseType,\n    environment: config.meta_env || meta.environment || 'sandbox',\n    request: {\n      method: 'POST',\n      url: `${baseUrl}/${phoneNumberId}/messages`,\n      headers: {\n        'Content-Type': 'application/json',\n        Authorization: `Bearer ${config.access_token || ''}`,\n      },\n      body: requestBody,\n    },\n  };\n  meta.route = responseType === 'template' ? 'meta_prepare_template' : 'meta_prepare_text';\n  meta.response = { status: 'queued' };\n  outputs.push({ json: { outbound, meta, normalized, config } });\n}\nreturn outputs;"
+      },
+      "id": "5c56d3af-401b-431d-af21-6fcb7116087a",
+      "name": "Preparar Resposta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        704,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));\nconst maxRetries = 2;\nconst results = [];\nfor (const item of items) {\n  const outbound = item.json.outbound || {};\n  const request = outbound.request || {};\n  const meta = { ...(item.json.meta || {}) };\n  const normalized = item.json.normalized || {};\n  if (!request.url || !request.method || !request.headers?.Authorization) {\n    meta.http_status = 500;\n    meta.success = false;\n    meta.response = { status: 'error', message: 'missing_meta_credentials' };\n    meta.error = 'missing_meta_credentials';\n    results.push({ json: { meta, outbound, normalized, delivery: { success: false, statusCode: 0, retries: 0 } } });\n    continue;\n  }\n  let retries = 0;\n  let success = false;\n  let statusCode = 0;\n  let body = null;\n  let errorCategory = null;\n  while (true) {\n    let shouldRetry = false;\n    try {\n      const response = await this.helpers.httpRequest({\n        method: request.method,\n        url: request.url,\n        headers: request.headers,\n        body: request.body,\n        json: true,\n        resolveWithFullResponse: true,\n      });\n      statusCode = response.statusCode;\n      body = response.body;\n      if (statusCode >= 500) {\n        errorCategory = 'server';\n        shouldRetry = retries < maxRetries;\n      } else if (statusCode >= 400) {\n        errorCategory = 'client';\n        shouldRetry = false;\n      } else {\n        success = true;\n      }\n    } catch (error) {\n      statusCode = error.statusCode || error.response?.statusCode || 500;\n      body = error.response?.body || error.message;\n      errorCategory = statusCode >= 500 ? 'server' : 'client';\n      shouldRetry = errorCategory === 'server' && retries < maxRetries;\n    }\n    if (success || !shouldRetry) {\n      break;\n    }\n    retries += 1;\n    const backoffMs = Math.min(10000, Math.pow(2, retries) * 1000);\n    await wait(backoffMs);\n  }\n  const httpStatus = success ? statusCode || 200 : statusCode || 502;\n  meta.http_status = httpStatus;\n  meta.success = success;\n  meta.route = outbound.type === 'template' ? 'meta_send_template' : 'meta_send_text';\n  meta.response = success\n    ? { status: 'sent', provider_status: statusCode, message_id: body?.messages?.[0]?.id || null }\n    : { status: 'error', provider_status: statusCode, category: errorCategory, details: body?.error || body };\n  if (!success) {\n    meta.error = errorCategory === 'server' ? 'meta_server_error' : 'meta_client_error';\n  } else {\n    delete meta.error;\n  }\n  results.push({ json: { meta, outbound, normalized, delivery: { success, statusCode, body, retries, errorCategory } } });\n}\nreturn results;"
+      },
+      "id": "4385f9f9-2a85-4843-849a-55e0ddba3853",
+      "name": "Meta: Enviar Mensagem",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  const startAt = meta.start_at || Date.now();\n  meta.latency_ms = Date.now() - startAt;\n  meta.provider = meta.provider || 'meta';\n  if (!meta.http_status) {\n    meta.http_status = 200;\n  }\n  if (!meta.response) {\n    meta.response = { status: meta.success === false ? 'error' : 'ok' };\n  }\n  item.json = { meta };\n  return item;\n});"
+      },
+      "id": "c914f3be-bd62-4e43-bc77-fdba512f1e59",
+      "name": "Calcular Latencia",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  const log = {\n    timestamp: new Date().toISOString(),\n    route: meta.route || 'unknown',\n    environment: meta.environment || 'sandbox',\n    provider: meta.provider || 'meta',\n    status: meta.http_status || 200,\n    success: meta.success !== false,\n    latency_ms: meta.latency_ms || 0,\n  };\n  if (meta.client_mask) {\n    log.client_mask = meta.client_mask;\n  }\n  if (meta.error) {\n    log.error = meta.error;\n  }\n  if (meta.response?.provider_status) {\n    log.provider_status = meta.response.provider_status;\n  }\n  if (meta.response?.message_id) {\n    log.message_id = meta.response.message_id;\n  }\n  console.log('[meta-metrics]', JSON.stringify(log));\n  return { json: { meta } };\n});"
+      },
+      "id": "b3afc0c8-a281-45be-b962-7386379668f3",
+      "name": "Registrar Metricas",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "meta",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true,
+          "binaryData": true
+        }
+      },
+      "id": "c16e86dc-49fb-4ed5-9738-a8bcb3e631da",
+      "name": "Meta: Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2880,
+        960
+      ],
+      "webhookId": "6c01cb74-bb50-4e48-8e13-aae11077cc9d",
+      "alwaysOutputData": false,
+      "notesInFlow": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "064f1d61-717e-4697-a7f1-b61ea0db630b",
+              "leftValue": "={{ ($json.httpMethod || $json.method || $json.req?.method || 'POST').toUpperCase() }}",
+              "rightValue": "GET",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2432,
+        960
+      ],
+      "id": "44f0b4af-8b0d-4d5d-a30a-619a833d60af",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.challenge }}",
+        "options": {
+          "responseCode": "={{ $json.meta?.http_status || 200 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -1984,
+        864
+      ],
+      "id": "6709ef8f-1e98-4dc8-95a2-ede5ddecfe63",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handshake GET Meta: valida verify_token e retorna hub.challenge\nconst query = $input.item.json.query || $input.item.json.event?.query || {};\nconst config = $input.item.json.config || {};\nconst verifyToken = config.verify_token || '';\nconst incomingToken = query['hub.verify_token'];\nconst challenge = query['hub.challenge'];\nconst ok = !!challenge && incomingToken === verifyToken;\nconst meta = {\n  route: ok ? 'meta_verify_ok' : 'meta_verify_fail',\n  http_status: ok ? 200 : 403,\n  success: ok,\n};\nreturn [{\n  json: {\n    challenge: ok ? challenge : 'invalid_verify_token',\n    meta,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2208,
+        864
+      ],
+      "id": "ea9deeca-d137-4b49-935f-0bab62070214",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => ({ json: { gpt_response: item.json } }));"
+      },
+      "id": "ea3b3bb9-20f3-499f-bb15-bdc0cc1955da",
+      "name": "Empacotar Resposta GPT",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        256,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex",
+        "options": {}
+      },
+      "id": "584b5f09-f728-45e8-a909-72582f12c2a8",
+      "name": "Merge GPT + Contexto",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        480,
+        672
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "cae6483f-b4ed-4aaa-a750-110d5905eeb2",
+      "name": "Error Handler v5.008",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2880,
+        1472
+      ],
+      "notesInFlow": "NOVO v5.008: Captura e trata erros do workflow"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error Handler v5.008\nconst error = $input.item.json;\n\nconsole.error('WORKFLOW ERROR:', {\n  node: error.node?.name,\n  message: error.error?.message,\n  timestamp: new Date().toISOString(),\n  execution_id: $execution.id\n});\n\nreturn [{\n  json: {\n    status: 'error',\n    error_message: error.error?.message || 'Unknown error',\n    error_node: error.node?.name,\n    timestamp: new Date().toISOString(),\n    execution_id: $execution.id\n  }\n}];"
+      },
+      "id": "968a0d98-c5d5-42b8-9f2a-29ac3dae6154",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -2656,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  status: \"error\",\n  message: \"Ocorreu um erro ao processar sua mensagem. Nossa equipe foi notificada.\",\n  error_id: $json.execution_id,\n  timestamp: $json.timestamp\n} }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "984a987c-f539-4f63-9dfd-52dd7b6af232",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -2432,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Rate Limiter v5.008\n// Simples implementação in-memory (para produção use Redis)\nconst maxRequestsPerMinute = 10;\nconst results = [];\nfor (const item of items) {\n  const clientId = item.json.client_id || 'unknown';\n  console.log(`Rate check for ${clientId} at ${new Date().toISOString()}`);\n  // TODO: Implementar contador real usando cache/Redis\n  results.push({ json: item.json });\n}\nreturn results;"
+      },
+      "id": "bceccd20-f791-4d94-a3af-46970683d146",
+      "name": "Rate Limit Check",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        384
+      ],
+      "notesInFlow": "NOVO v5.008: Rate limiting (implementação básica, requer Redis para produção)"
+    },
+    {
+      "parameters": {
+        "functionCode": "const memoriaItems = $input.all(0);\nconst mensagensItems = $input.all(1);\nconst historicoItems = $input.all(2);\nconst kbItems = $input.all(3);\nconst byClient = new Map();\n\nfunction ensure(clientId) {\n  if (!byClient.has(clientId)) {\n    byClient.set(clientId, {\n      client_id: clientId,\n      client_name: 'Cliente',\n      message_content: '',\n      memoria_cliente: null,\n      mensagens_recentes: [],\n      historico_similar: [],\n      knowledge_base: [],\n      normalized: {},\n      config: {},\n      meta: {},\n    });\n  }\n  return byClient.get(clientId);\n}\n\nfor (const item of memoriaItems) {\n  const clientId = item.json?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.memoria_cliente = item.json;\n  target.client_name = item.json?.client_name || target.client_name;\n  target.message_content = item.json?.message_content || target.message_content;\n  target.normalized = item.json?.normalized || target.normalized;\n  target.config = item.json?.config || target.config;\n  target.meta = item.json?.meta || target.meta;\n}\n\nfor (const item of mensagensItems) {\n  const clientId = item.json?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.mensagens_recentes.push(item.json);\n  if (!target.message_content) {\n    target.message_content = item.json?.content || '';\n  }\n}\n\nfor (const item of historicoItems) {\n  const clientId = item.json?.client_id || item.json?.matches?.[0]?.metadata?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.historico_similar = item.json?.matches || target.historico_similar;\n}\n\nfor (const item of kbItems) {\n  const clientId = item.json?.client_id || item.json?.matches?.[0]?.metadata?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.knowledge_base = item.json?.matches || target.knowledge_base;\n}\n\nreturn Array.from(byClient.values()).map((json) => ({ json }));"
+      },
+      "id": "66cdf559-ccad-4e08-9101-42cef2f7502c",
+      "name": "Merge Contextos",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        384
+      ],
+      "notesInFlow": "UPDATED v5.008: Robustez contra falhas de input"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f798a00a-c8e1-4abe-bf0a-ee0272514b8c",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2b89fc0c-cdaf-402e-b5b9-be0d1684064b",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "784e7dfe-0580-49a6-9cdd-52560e318f35",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1312,
+        848
+      ],
+      "id": "3acda9b1-845e-4e91-b5a6-0990ee1db3a8",
+      "name": "Roteamento Evento"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "250284d5-0b71-462d-912f-793b1927ddda",
+                    "leftValue": "={{$json.signature?.valid ? 'valid' : 'invalid'}}",
+                    "rightValue": "valid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e54d94cd-c9a6-4b5a-b7f8-0bc007acc070",
+                    "leftValue": "={{$json.signature?.valid ? 'valid' : 'invalid'}}",
+                    "rightValue": "invalid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1536,
+        1056
+      ],
+      "id": "e569d7a6-1a8f-4306-8ccb-02836019a2f4",
+      "name": "Roteamento Assinatura"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.2
+        },
+        "requestOptions": {}
+      },
+      "id": "2d8f7f72-ac84-4b0c-9d61-3012b5226dce",
+      "name": "GPT-4: Gerar Resposta",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        32,
+        384
+      ],
+      "notesInFlow": "UPDATED v5.008: Modelo gpt-4o",
+      "credentials": {
+        "openAiApi": {
+          "id": "iUiB0O7I8X0xfIfu",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.raw_body || '' }}",
+        "dataPropertyName": "expected_signature_hmac",
+        "secret": "={{ $json.config.app_secret }}"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -1984,
+        1056
+      ],
+      "id": "9419d833-61ad-4c93-bddb-84f30aea37ba",
+      "name": "Crypto"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ {\n  \"config\": {\n    \"verify_token\": $env.META_VERIFY_TOKEN || 'gynprog_meta_202',\n    \"access_token\": $env.META_ACCESS_TOKEN || 'EAAW6NJLCMuEBQOZBaXdDSbO7fsGpLsYg4Jw3gKWjw8LSLeuFsSrkOuikRd2r88eq7ZAF5aPcTgV0ee3616DG0IlyskDWaM48SsyehRFTGZCV7J2lP1Tm3GujuBcgRUeIi8dnVZB6IrApCJZBWjU8ZAyZC8Ix87VVDmfa82rhRcMZAXPbxuTsWhi34IcmLaBq6wcc0AZDZD',\n    \"phone_number_id\": $env.META_PHONE_NUMBER_ID || '825833630621869',\n    \"waba_id\": $env.META_WABA_ID || '822264630681600',\n    \"app_id\": $env.META_APP_ID || '1612109846819553',\n    \"app_secret\": $env.META_APP_SECRET || '66eb81da246542445efb2c2bb3f921da',\n    \"meta_env\": $env.META_ENV || 'production',\n    \"graph_version\": $env.META_GRAPH_VERSION || 'v20.0',\n    \"base_url\": $env.META_BASE_URL || ''\n  }\n} }}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2656,
+        960
+      ],
+      "id": "10567b4c-491f-4172-a97e-88310e554061",
+      "name": "Carregar Config Meta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Meta: Webhook": {
+      "main": [
+        [
+          {
+            "node": "Carregar Config Meta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Carregar Config Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Evento Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Evento Meta": {
+      "main": [
+        [
+          {
+            "node": "Crypto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Assinatura": {
+      "main": [
+        [
+          {
+            "node": "Roteamento Assinatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Check": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL: Buscar Memoria",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OpenAI: Embedding",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PostgreSQL: Mensagens Recentes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge GPT + Contexto",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "PostgreSQL: Buscar Memoria": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Embedding": {
+      "main": [
+        [
+          {
+            "node": "Pinecone: Historico (HTTP)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pinecone: Knowledge Base (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4: Atualizar Memoria": {
+      "main": [
+        [
+          {
+            "node": "Processar Memoria JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Memoria JSON": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL: Salvar Memoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Empacotar Resposta GPT": {
+      "main": [
+        [
+          {
+            "node": "Merge GPT + Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge GPT + Contexto": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Meta: Enviar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta: Enviar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assinatura Invalida": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Status": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento Desconhecido": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Latencia": {
+      "main": [
+        [
+          {
+            "node": "Registrar Metricas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Metricas": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler v5.008": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Contextos": {
+      "main": [
+        [
+          {
+            "node": "GPT-4: Gerar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roteamento Evento": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processar Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evento Desconhecido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roteamento Assinatura": {
+      "main": [
+        [
+          {
+            "node": "Roteamento Evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assinatura Invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL: Mensagens Recentes": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone: Historico (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone: Knowledge Base (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4: Gerar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Empacotar Resposta GPT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GPT-4: Atualizar Memoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto": {
+      "main": [
+        [
+          {
+            "node": "Validar Assinatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carregar Config Meta": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6318e132-86d5-49bb-801b-b3f890e27e9a",
+  "meta": {
+    "instanceId": "ff86a5bee6b26a4fe33e10fc3cf5e69a885b4933737382188c57b9f1d85f558c"
+  },
+  "id": "A7vr3KCMogGtrhcX",
+  "tags": []
+}
