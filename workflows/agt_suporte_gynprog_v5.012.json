@@ -1,0 +1,1658 @@
+{
+  "name": "agt_suporte_gynprog_v5.011",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM gynprog_support.client_memory WHERE client_id = '{{$json.client_id}}'",
+        "options": {}
+      },
+      "id": "fcc95565-170b-4555-b6b4-67a48dc6e264",
+      "name": "PostgreSQL: Buscar Memoria",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      },
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT client_id, content, timestamp, direction FROM gynprog_support.messages WHERE client_id = '{{$json.client_id}}' ORDER BY timestamp DESC LIMIT {{ $json.limit || 20 }}",
+        "options": {}
+      },
+      "id": "c4285ec9-e4c9-4d18-90a8-bd2d69d942a8",
+      "name": "PostgreSQL: Mensagens Recentes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.PINECONE_URL || $json.config?.pinecone_url || 'https://gynprog-xjegwcj.svc.aped-4627-b74a.pinecone.io') + '/query' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": false,
+        "queryParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"vector\": $json.embedding || [],\n  \"topK\": 3,\n  \"namespace\": \"client_history\",\n  \"filter\": $json.client_id ? { \"client_id\": $json.client_id } : undefined,\n  \"includeMetadata\": true\n} }}",
+        "options": {}
+      },
+      "id": "5c170be1-c78f-482b-a309-d735a6ca78e5",
+      "name": "Pinecone: Historico (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        288,
+        384
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1v1vzFPQj8xMt3ix",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.PINECONE_URL || $json.config?.pinecone_url || 'https://gynprog-xjegwcj.svc.aped-4627-b74a.pinecone.io') + '/query' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": false,
+        "queryParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"vector\": $json.embedding || [],\n  \"topK\": 5,\n  \"namespace\": \"gynprog_knowledge\",\n  \"includeMetadata\": true\n} }}",
+        "options": {}
+      },
+      "id": "94496c95-f42b-48b5-8da9-9f070eb61127",
+      "name": "Pinecone: Knowledge Base (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        288,
+        592
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1v1vzFPQj8xMt3ix",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4.1-mini",
+        "prompt": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "Gere um JSON compacto com os campos: conversation_summary (string), new_resolved_issues (array de strings), new_pending_issues (array de strings), key_topics (array de strings), sentiment (positive|neutral|negative). N\u00e3o invente dados fora do contexto. Apenas retorne o JSON."
+            },
+            {
+              "content": "Mensagem do cliente: {{$json.message_content || $json.normalized?.text || ''}}\n                Resposta do agente: {{$json.gpt_response?.choices?.[0]?.message?.content || ''}}\n                Mem\u00f3ria anterior: {{$json.memoria_cliente?.conversation_summary || 'Sem mem\u00f3ria pr\u00e9via'}}\n                Pend\u00eancias anteriores: {{ ($json.memoria_cliente?.pending_issues || []).join(', ') || 'Nenhuma' }}\n                Resolvidos anteriormente: {{ ($json.memoria_cliente?.resolved_issues || []).join(', ') || 'Nenhum' }}\n                \u00daltimas mensagens:\n{{ ($json.mensagens_recentes || []).map(m => `${m.direction || 'inbound'}: ${m.content || m.message_content || m.text || ''}`).join('\n') || 'Sem hist\u00f3rico recente' }}\n                Gere o JSON solicitado considerando a mensagem atual e a resposta do agente."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 800,
+          "temperature": 0.3
+        },
+        "requestOptions": {}
+      },
+      "id": "3de07c04-25db-43d7-9d35-f506c3711343",
+      "name": "GPT-4: Atualizar Memoria",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        896,
+        272
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "LOwxrksAXBMCkhXE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = [];\n\nfor (const item of items) {\n  try {\n    const content = item.json?.choices?.[0]?.message?.content || item.json?.message || '{}';\n    let memoryData;\n    try {\n      memoryData = typeof content === 'string' ? JSON.parse(content) : content;\n    } catch (parseError) {\n      console.error('Erro ao parsear JSON da mem\u00f3ria:', parseError);\n      memoryData = { conversation_summary: '', new_resolved_issues: [], new_pending_issues: [], key_topics: [], sentiment: 'neutral' };\n    }\n\n    const normalized = {\n      conversation_summary: memoryData.conversation_summary || '',\n      new_resolved_issues: Array.isArray(memoryData.new_resolved_issues) ? memoryData.new_resolved_issues : [],\n      new_pending_issues: Array.isArray(memoryData.new_pending_issues) ? memoryData.new_pending_issues : [],\n      key_topics: Array.isArray(memoryData.key_topics) ? memoryData.key_topics : [],\n      sentiment: memoryData.sentiment || 'neutral',\n    };\n\n    const context = item.json?.normalized || item.json || {};\n    const clientId = item.json?.client_id || context.client_id || context.sender || context.normalized?.client_id || '';\n    const config = item.json?.config || context.config || {};\n    const meta = { ...(item.json?.meta || context.meta || {}) };\n\n    results.push({\n      json: {\n        client_id: clientId,\n        conversation_summary: normalized.conversation_summary,\n        new_resolved_issues: normalized.new_resolved_issues,\n        new_pending_issues: normalized.new_pending_issues,\n        key_topics: normalized.key_topics,\n        sentiment: normalized.sentiment,\n        config,\n        meta,\n        normalized: context,\n      },\n    });\n  } catch (error) {\n    console.error('Erro ao processar mem\u00f3ria:', error);\n    const context = item.json?.normalized || item.json || {};\n    const clientId = item.json?.client_id || context.client_id || context.sender || '';\n    results.push({\n      json: {\n        client_id: clientId,\n        conversation_summary: '',\n        new_resolved_issues: [],\n        new_pending_issues: [],\n        key_topics: [],\n        sentiment: 'neutral',\n        config: context.config || {},\n        meta: context.meta || {},\n        normalized: context,\n      },\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "4642e562-12f4-41ce-994c-90c5ac8b3d77",
+      "name": "Processar Memoria JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gynprog_support.client_memory \n(client_id, conversation_summary, resolved_issues, pending_issues, key_topics, sentiment, last_updated)\nVALUES ($1, $2, $3::text[], $4::text[], $5::text[], $6, NOW())\nON CONFLICT (client_id) DO UPDATE SET\n  conversation_summary = EXCLUDED.conversation_summary,\n  resolved_issues = EXCLUDED.resolved_issues || client_memory.resolved_issues,\n  pending_issues = EXCLUDED.pending_issues,\n  key_topics = EXCLUDED.key_topics,\n  sentiment = EXCLUDED.sentiment,\n  last_updated = NOW()",
+        "options": {}
+      },
+      "id": "415548b4-45cd-4e63-b8ea-0a17cca1b44a",
+      "name": "PostgreSQL: Salvar Memoria",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        192
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "3ZWnI2rLcKXLdjEA",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: $json.meta?.response?.status || 'ok', latency_ms: $json.meta?.latency_ms || 0, route: $json.meta?.route || 'unknown' } }}",
+        "options": {
+          "responseCode": "={{ $json.meta?.http_status || 200 }}"
+        }
+      },
+      "id": "e2ac339b-21f0-4064-ad1e-f05a82d667ba",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "function sanitizeString(str, maxLength = 500) {\n  if (typeof str !== 'string') return '';\n  return str.trim().slice(0, maxLength);\n}\nfunction sanitizePhoneNumber(phone) {\n  if (!phone) return '';\n  const cleaned = String(phone).replace(/[^0-9]/g, '');\n  return cleaned.slice(0, 20);\n}\nfunction extractContactInfo(value) {\n  const contacts = value.contacts || [];\n  const contact = contacts[0] || {};\n  const name = sanitizeString(contact.profile?.name || contact.profile?.Name || contact.name || 'Contato Meta');\n  const waId = sanitizePhoneNumber(contact.wa_id);\n  return { name, waId };\n}\nfunction extractMessageText(message) {\n  const messageType = message.type || 'text';\n  let text = '';\n  try {\n    switch (messageType) {\n      case 'text': text = message.text?.body || ''; break;\n      case 'interactive':\n        const interactive = message.interactive || {};\n        if (interactive.type === 'list_reply') text = interactive.list_reply?.title || interactive.list_reply?.description || '';\n        else if (interactive.type === 'button_reply') text = interactive.button_reply?.title || interactive.button_reply?.id || '';\n        break;\n      case 'button': text = message.button?.text || ''; break;\n      case 'reaction': text = message.reaction?.emoji || ''; break;\n      case 'image': case 'video': case 'audio': case 'document':\n        text = message[messageType]?.caption || message[messageType]?.filename || '';\n        break;\n      default: text = '';\n    }\n  } catch (error) { text = ''; }\n  return text || `[${messageType} sem texto]`;\n}\nfunction createTimestamp(messageTimestamp) {\n  try {\n    const timestampSeconds = Number(messageTimestamp || Date.now() / 1000);\n    if (Number.isNaN(timestampSeconds)) return new Date().toISOString();\n    return new Date(timestampSeconds * 1000).toISOString();\n  } catch (error) { return new Date().toISOString(); }\n}\nfunction validateEvent(item) {\n  if (!item || !item.json) throw new Error('Item inv\u00e1lido: estrutura JSON ausente');\n  const event = item.json.event || {};\n  const messages = event.messages;\n  if (!Array.isArray(messages) || messages.length === 0) {\n    console.warn('Evento sem mensagens v\u00e1lidas');\n    return false;\n  }\n  return true;\n}\nconst results = [];\nconst errors = [];\nfor (let i = 0; i < items.length; i++) {\n  try {\n    if (!validateEvent(items[i])) continue;\n    const base = items[i].json || {};\n    const config = base.config || {};\n    const value = base.event || {};\n    const messages = value.messages || [];\n    const metaBase = { ...(base.meta || {}) };\n    metaBase.environment = config.meta_env || metaBase.environment || 'sandbox';\n    metaBase.provider = 'meta';\n    metaBase.version = 'v5.009';\n    const { name: contactName, waId } = extractContactInfo(value);\n    for (const message of messages) {\n      try {\n        const senderWaId = sanitizePhoneNumber(message.from || waId);\n        if (!senderWaId) continue;\n        const isoTimestamp = createTimestamp(message.timestamp);\n        const messageType = sanitizeString(message.type || 'text', 50);\n        const text = sanitizeString(extractMessageText(message), 4000);\n        const meta = { ...metaBase };\n        meta.client_mask = senderWaId.slice(-4);\n        meta.route = 'meta_inbound';\n        meta.processed_at = new Date().toISOString();\n        const normalized = {\n          sender: senderWaId,\n          type: messageType,\n          text: text,\n          timestamp: isoTimestamp,\n          message_id: sanitizeString(message.id || '', 100),\n          context_id: sanitizeString(message.context?.id || '', 100),\n          raw: message,\n          config,\n          meta,\n          client_id: senderWaId,\n        };\n        results.push({\n          json: {\n            client_id: senderWaId,\n            client_name: contactName,\n            message_content: text,\n            message_type: messageType,\n            message_id: normalized.message_id,\n            timestamp: isoTimestamp,\n            direction: 'inbound',\n            channel: 'whatsapp:meta',\n            normalized,\n            meta,\n            config,\n            event: value,\n          },\n        });\n      } catch (messageError) {\n        errors.push({ stage: 'message_processing', message_id: message.id, error: messageError.message });\n      }\n    }\n  } catch (itemError) {\n    errors.push({ stage: 'item_processing', item_index: i, error: itemError.message });\n  }\n}\nif (results.length === 0) throw new Error('Nenhuma mensagem v\u00e1lida foi processada');\nreturn results;"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -672,
+        192
+      ],
+      "id": "c7f31362-ee32-4f90-8d09-251d1e610ae1",
+      "name": "Normalizar Mensagem"
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = [];\nfor (const item of items) {\n  // Preferir raw body vindo em bin\u00e1rio quando Webhook est\u00e1 com rawBody/binaryData\n  const binarySources = Object.values(item.binary || {});\n  let rawBody = '';\n  if (binarySources.length && binarySources[0]?.data) {\n    rawBody = Buffer.from(binarySources[0].data, 'base64').toString('utf8');\n  } else if (item.binary?.rawBody?.data) {\n    rawBody = Buffer.from(item.binary.rawBody.data, 'base64').toString('utf8');\n  } else if (typeof item.json.body === 'string') {\n    rawBody = item.json.body;\n  } else if (item.json.body !== undefined) {\n    try {\n      rawBody = JSON.stringify(item.json.body);\n    } catch (error) {\n      rawBody = '';\n    }\n  }\n\n  let parsedBody = null;\n  if (rawBody) {\n    try {\n      parsedBody = JSON.parse(rawBody);\n    } catch (error) {\n      parsedBody = null;\n    }\n  } else if (item.json.body && typeof item.json.body === 'object') {\n    parsedBody = item.json.body;\n  }\n\n  const entry = parsedBody?.entry?.[0] || {};\n  const change = entry.changes?.[0] || {};\n  const value = change.value || null;\n  const meta = {\n    start_at: Date.now(),\n    provider: 'meta',\n    channel: 'whatsapp',\n    environment: item.json.config?.meta_env || item.json.meta?.environment || null,\n    phone_number_id: value?.metadata?.phone_number_id || null,\n    display_phone_number: value?.metadata?.display_phone_number || null,\n  };\n\n  results.push({\n    json: {\n      meta,\n      headers: item.json.headers || {},\n      query: item.json.query || {},\n      raw_body: rawBody,\n      entry,\n      event: value,\n      method: item.json.httpMethod || item.json.method || 'POST',\n      config: item.json.config || {},\n    },\n  });\n}\nreturn results;"
+      },
+      "id": "408a366b-33c5-4aea-86cf-1889fb1eaff3",
+      "name": "Preparar Evento Meta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1792,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nfunction buildResult(item, extra) {\n  return {\n    json: {\n      ...item.json,\n      signature: {\n        valid: extra.valid,\n        reason: extra.reason,\n        header: extra.header ?? null,\n        expected: extra.expected ?? null,\n      },\n    },\n  };\n}\nreturn items.map((item) => {\n  const json = item.json || {};\n  const config = json.config || {};\n  const rawBody = json.raw_body;\n  const headerSignature = json.headers?.['x-hub-signature-256'];\n  const hmacHex = json.expected_signature_hmac;\n  if (!config.app_secret) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'META_APP_SECRET ausente (defina env META_APP_SECRET ou META_APP_SECRET_FALLBACK)',\n      header: headerSignature || 'missing',\n      expected: null,\n    });\n  }\n  if (!rawBody) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'raw_body ausente',\n      header: headerSignature || 'missing',\n      expected: null,\n    });\n  }\n  if (!headerSignature) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'Header X-Hub-Signature-256 ausente',\n      header: 'missing',\n      expected: null,\n    });\n  }\n  if (!hmacHex) {\n    return buildResult(item, {\n      valid: false,\n      reason: 'Assinatura esperada (HMAC) n\u00e3o calculada',\n      header: headerSignature,\n      expected: null,\n    });\n  }\n  const expectedSignature = 'sha256=' + String(hmacHex).trim().toLowerCase();\n  const candidate = String(headerSignature).trim().toLowerCase();\n  const valid =\n    candidate.length === expectedSignature.length &&\n    candidate === expectedSignature;\n  return buildResult(item, {\n    valid,\n    reason: valid ? 'Assinatura v\u00e1lida' : 'Assinatura inv\u00e1lida',\n    header: headerSignature,\n    expected: expectedSignature,\n  });\n});"
+      },
+      "id": "96d6b830-23b4-4965-b44f-749e9c91806b",
+      "name": "Validar Assinatura",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1344,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  meta.http_status = 401;\n  meta.route = 'meta_signature_invalid';\n  meta.success = false;\n  meta.response = { status: 'error', reason: 'invalid_signature' };\n  item.json.meta = meta;\n  return { json: item.json };\n});"
+      },
+      "id": "109a2437-0c32-4a64-a182-65f3522c8125",
+      "name": "Assinatura Invalida",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = [];\nfor (const item of items) {\n  const statuses = item.json.event?.statuses || [];\n  if (!statuses.length) {\n    const meta = item.json.meta || {};\n    meta.route = 'meta_status_empty';\n    meta.http_status = 200;\n    meta.success = true;\n    meta.response = { status: 'ignored' };\n    results.push({ json: { meta } });\n    continue;\n  }\n  for (const status of statuses) {\n    const meta = { ...(item.json.meta || {}) };\n    meta.route = 'meta_status';\n    meta.http_status = 200;\n    meta.success = status.status !== 'failed';\n    meta.response = {\n      status: status.status,\n      message_id: status.id || null,\n      conversation_id: status.conversation?.id || null,\n      timestamp: status.timestamp || null,\n    };\n    if (status.errors?.length) {\n      meta.error = status.errors[0].code || 'status_error';\n      meta.response.error = status.errors[0];\n      meta.success = false;\n    } else {\n      delete meta.error;\n    }\n    results.push({ json: { meta, status } });\n  }\n}\nreturn results;"
+      },
+      "id": "28e62676-3ebe-4d61-a291-8a9fb8fa6b6c",
+      "name": "Processar Status",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  meta.route = 'meta_unknown_event';\n  meta.http_status = 200;\n  meta.success = true;\n  meta.response = { status: 'ignored', message: 'event-type-not-handled' };\n  item.json.meta = meta;\n  return { json: item.json };\n});"
+      },
+      "id": "e25d4975-6de2-4261-9472-e1f6154c1f4c",
+      "name": "Evento Desconhecido",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const inputMain = $input.all(0);\nconst inputContext = $input.all(1);\nconst outputs = [];\n\nfor (let index = 0; index < inputMain.length; index += 1) {\n  const gptItem = inputMain[index];\n  const contextItem = inputContext?.[index] || { json: {} };\n  const normalized = contextItem.json?.normalized || contextItem.json || {};\n  const config = normalized.config || {};\n  const meta = { ...(normalized.meta || {}) };\n\n  const direction = (normalized.direction || '').toLowerCase();\n  if (direction && direction !== 'inbound') {\n    outputs.push({ json: { meta: { ...meta, route: 'meta_skip', reason: 'not_inbound' }, normalized, config } });\n    continue;\n  }\n  const sender = (normalized.sender || normalized.client_id || '').trim();\n  if (sender && sender === (config.phone_number_id || '').trim()) {\n    outputs.push({ json: { meta: { ...meta, route: 'meta_skip', reason: 'self_sender' }, normalized, config } });\n    continue;\n  }\n\n  const gptText =\n    gptItem.json?.gpt_text ||\n    gptItem.json?.output?.[0]?.content?.[0]?.text ||\n    gptItem.json?.choices?.[0]?.message?.content ||\n    '';\n  const cleanedText = (gptText || '').trim();\n  const userText = (normalized.message_content || normalized.text || '').trim();\n\n  const audioUrl = gptItem.json?.tts_audio_url || gptItem.json?.audio_url || '';\n  const audioMime = gptItem.json?.tts_audio_mime || 'audio/mpeg';\n\n  if (!cleanedText && !audioUrl) {\n    outputs.push({ json: { meta: { ...meta, route: 'meta_skip', reason: 'empty_or_echo' }, normalized, config } });\n    continue;\n  }\n  if (cleanedText && cleanedText === userText) {\n    outputs.push({ json: { meta: { ...meta, route: 'meta_skip', reason: 'empty_or_echo' }, normalized, config } });\n    continue;\n  }\n\n  const accessToken = config.access_token || '';\n  const phoneNumberId = config.phone_number_id || '';\n  if (!accessToken || !phoneNumberId) {\n    outputs.push({ json: { meta: { ...meta, route: 'meta_skip', reason: 'missing_meta_credentials' }, normalized, config } });\n    continue;\n  }\n\n  const templateHint = normalized.meta?.outbound_template || gptItem.json?.template || null;\n  const wantsAudio = !!audioUrl;\n  const responseType = wantsAudio\n    ? 'audio'\n    : templateHint?.name || templateHint?.id\n    ? 'template'\n    : 'text';\n\n  const requestBody = {\n    messaging_product: 'whatsapp',\n    to: sender || '',\n  };\n  if (normalized.message_id) {\n    requestBody.context = { message_id: normalized.message_id };\n  }\n\n  if (responseType === 'template') {\n    const templateName = templateHint.name || templateHint.id;\n    const templateLanguage = templateHint.language || config.template_language || 'pt_BR';\n    const templateComponents =\n      templateHint.components ||\n      (templateHint.params\n        ? [{ type: 'body', parameters: templateHint.params.map(param => ({ type: 'text', text: param })) }]\n        : undefined);\n    requestBody.type = 'template';\n    requestBody.template = { name: templateName, language: { code: templateLanguage } };\n    if (templateComponents) requestBody.template.components = templateComponents;\n  } else if (responseType === 'audio') {\n    requestBody.type = 'audio';\n    requestBody.audio = { link: audioUrl };\n    if (cleanedText) requestBody.audio.caption = cleanedText;\n  } else {\n    requestBody.type = 'text';\n    requestBody.text = { preview_url: false, body: cleanedText };\n  }\n\n  const graphVersion = config.graph_version || 'v20.0';\n  const baseUrl = config.base_url || `https://graph.facebook.com/${graphVersion}`;\n\n  const outbound = {\n    type: responseType,\n    environment: config.meta_env || meta.environment || 'sandbox',\n    request: {\n      method: 'POST',\n      url: `${baseUrl}/${phoneNumberId}/messages`,\n      headers: {\n        'Content-Type': 'application/json',\n        Authorization: `Bearer ${accessToken}`,\n      },\n      body: requestBody,\n    },\n  };\n\n  meta.route =\n    responseType === 'template'\n      ? 'meta_prepare_template'\n      : responseType === 'audio'\n      ? 'meta_prepare_audio'\n      : 'meta_prepare_text';\n  meta.response = { status: 'queued' };\n\n  outputs.push({ json: { outbound, meta, normalized, config } });\n}\n\nreturn outputs;\n"
+      },
+      "id": "5fae724b-b08c-449a-8a83-23fd57730a55",
+      "name": "Preparar Resposta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        896,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));\nconst maxRetries = 2;\nconst results = [];\nfor (const item of items) {\n  const outbound = item.json.outbound || {};\n  const request = outbound.request || {};\n  const meta = { ...(item.json.meta || {}) };\n  const normalized = item.json.normalized || {};\n  if (!request.url || !request.method || !request.headers?.Authorization) {\n    meta.http_status = 500;\n    meta.success = false;\n    meta.response = { status: 'error', message: 'missing_meta_credentials' };\n    meta.error = 'missing_meta_credentials';\n    results.push({ json: { meta, outbound, normalized, delivery: { success: false, statusCode: 0, retries: 0 } } });\n    continue;\n  }\n  let retries = 0;\n  let success = false;\n  let statusCode = 0;\n  let body = null;\n  let errorCategory = null;\n  while (true) {\n    let shouldRetry = false;\n    try {\n      const response = await this.helpers.httpRequest({\n        method: request.method,\n        url: request.url,\n        headers: request.headers,\n        body: request.body,\n        json: true,\n        resolveWithFullResponse: true,\n      });\n      statusCode = response.statusCode;\n      body = response.body;\n      if (statusCode >= 500) {\n        errorCategory = 'server';\n        shouldRetry = retries < maxRetries;\n      } else if (statusCode >= 400) {\n        errorCategory = 'client';\n        shouldRetry = false;\n      } else {\n        success = true;\n      }\n    } catch (error) {\n      statusCode = error.statusCode || error.response?.statusCode || 500;\n      body = error.response?.body || error.message;\n      errorCategory = statusCode >= 500 ? 'server' : 'client';\n      shouldRetry = errorCategory === 'server' && retries < maxRetries;\n    }\n    if (success || !shouldRetry) {\n      break;\n    }\n    retries += 1;\n    const backoffMs = Math.min(10000, Math.pow(2, retries) * 1000);\n    await wait(backoffMs);\n  }\n  const httpStatus = success ? statusCode || 200 : statusCode || 502;\n  meta.http_status = httpStatus;\n  meta.success = success;\n  meta.route = outbound.type === 'template' ? 'meta_send_template' : 'meta_send_text';\n  meta.response = success\n    ? { status: 'sent', provider_status: statusCode, message_id: body?.messages?.[0]?.id || null }\n    : { status: 'error', provider_status: statusCode, category: errorCategory, details: body?.error || body };\n  if (!success) {\n    meta.error = errorCategory === 'server' ? 'meta_server_error' : 'meta_client_error';\n  } else {\n    delete meta.error;\n  }\n  results.push({ json: { meta, outbound, normalized, delivery: { success, statusCode, body, retries, errorCategory } } });\n}\nreturn results;"
+      },
+      "id": "99f1573c-4f3d-45b3-a065-e78f50590adb",
+      "name": "Meta: Enviar Mensagem",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  const startAt = meta.start_at || Date.now();\n  meta.latency_ms = Date.now() - startAt;\n  meta.provider = meta.provider || 'meta';\n  if (!meta.http_status) {\n    meta.http_status = 200;\n  }\n  if (!meta.response) {\n    meta.response = { status: meta.success === false ? 'error' : 'ok' };\n  }\n  item.json = { meta };\n  return item;\n});"
+      },
+      "id": "7b58ee45-7127-4d24-b91c-695d637fe772",
+      "name": "Calcular Latencia",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const meta = item.json.meta || {};\n  const log = {\n    timestamp: new Date().toISOString(),\n    route: meta.route || 'unknown',\n    environment: meta.environment || 'sandbox',\n    provider: meta.provider || 'meta',\n    status: meta.http_status || 200,\n    success: meta.success !== false,\n    latency_ms: meta.latency_ms || 0,\n  };\n  if (meta.client_mask) {\n    log.client_mask = meta.client_mask;\n  }\n  if (meta.error) {\n    log.error = meta.error;\n  }\n  if (meta.response?.provider_status) {\n    log.provider_status = meta.response.provider_status;\n  }\n  if (meta.response?.message_id) {\n    log.message_id = meta.response.message_id;\n  }\n  console.log('[meta-metrics]', JSON.stringify(log));\n  return { json: { meta } };\n});"
+      },
+      "id": "3243a21b-e4ea-4bab-af71-23fe74fd1c38",
+      "name": "Registrar Metricas",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "meta",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true
+        }
+      },
+      "id": "e1c24aa5-b424-49ae-8320-be94740fa5f7",
+      "name": "Meta: Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2464,
+        864
+      ],
+      "webhookId": "6c01cb74-bb50-4e48-8e13-aae11077cc9d",
+      "alwaysOutputData": false,
+      "notesInFlow": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "064f1d61-717e-4697-a7f1-b61ea0db630b",
+              "leftValue": "={{ $json.query?.['hub.challenge'] ? 'GET' : ($json.httpMethod || $json.method || $json.req?.method || 'POST').toUpperCase() }}",
+              "rightValue": "GET",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2016,
+        864
+      ],
+      "id": "d99f6131-5455-461e-a440-c460245dcfea",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.challenge }}",
+        "options": {
+          "responseCode": "={{ $json.meta?.http_status || 200 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -1568,
+        768
+      ],
+      "id": "b4f989c4-e0b3-4712-a733-c9e8bf1ef0b1",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handshake GET Meta: valida verify_token e retorna hub.challenge\nconst query = $input.item.json.query || $input.item.json.event?.query || {};\nconst config = $input.item.json.config || {};\nconst verifyToken = config.verify_token || '';\nconst incomingToken = query['hub.verify_token'];\nconst challenge = query['hub.challenge'];\nconst ok = !!challenge && incomingToken === verifyToken;\nconst meta = {\n  route: ok ? 'meta_verify_ok' : 'meta_verify_fail',\n  http_status: ok ? 200 : 403,\n  success: ok,\n};\nreturn [{\n  json: {\n    challenge: ok ? challenge : 'invalid_verify_token',\n    meta,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1792,
+        768
+      ],
+      "id": "25b9cd16-ce14-4e93-a073-39121cfc4bb7",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "functionCode": "const text =\n  $json.output?.[0]?.content?.[0]?.text ||\n  $json.message?.content ||\n  $json.choices?.[0]?.message?.content ||\n  '';\nreturn [{ json: { gpt_response: $json, gpt_text: text } }];\n"
+      },
+      "id": "3e49a653-012b-4fbf-912b-37488eb65d2a",
+      "name": "Empacotar Resposta GPT",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "ac3546b5-905a-411a-a056-6f03dddcfae3",
+      "name": "Merge GPT + Contexto",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "e4f90b57-7a37-46b0-be78-89334119ede4",
+      "name": "Error Handler v5.009",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2464,
+        1376
+      ],
+      "notesInFlow": "NOVO v5.009: Captura e trata erros do workflow"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error Handler v5.009\nconst error = $input.item.json;\n\nconsole.error('WORKFLOW ERROR:', {\n  node: error.node?.name,\n  message: error.error?.message,\n  timestamp: new Date().toISOString(),\n  execution_id: $execution.id\n});\n\nreturn [{\n  json: {\n    status: 'error',\n    error_message: error.error?.message || 'Unknown error',\n    error_node: error.node?.name,\n    timestamp: new Date().toISOString(),\n    execution_id: $execution.id\n  }\n}];"
+      },
+      "id": "abdff709-d8e6-4916-9d3a-7d2829bf766e",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -2240,
+        1376
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  status: \"error\",\n  message: \"Ocorreu um erro ao processar sua mensagem. Nossa equipe foi notificada.\",\n  error_id: $json.execution_id,\n  timestamp: $json.timestamp\n} }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "7fccfa4d-0e37-4c1d-a53b-6d5b17eacfa7",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -2016,
+        1376
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Rate Limiter v5.009\n// Simples implementa\u00e7\u00e3o in-memory (para produ\u00e7\u00e3o use Redis)\nconst maxRequestsPerMinute = 10;\nconst results = [];\nfor (const item of items) {\n  const clientId = item.json.client_id || 'unknown';\n  console.log(`Rate check for ${clientId} at ${new Date().toISOString()}`);\n  // TODO: Implementar contador real usando cache/Redis\n  results.push({ json: item.json });\n}\nreturn results;"
+      },
+      "id": "2cd426fc-5194-4c2c-bef5-33d4f673771d",
+      "name": "Rate Limit Check",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        192
+      ],
+      "notesInFlow": "NOVO v5.009: Rate limiting (implementa\u00e7\u00e3o b\u00e1sica, requer Redis para produ\u00e7\u00e3o)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "const memoriaItems = $input.all(0) || [];\nconst mensagensItems = $input.all(1) || [];\nconst historicoItems = $input.all(2) || [];\nconst kbItems = $input.all(3) || [];\nconst byClient = new Map();\n\nfunction ensure(clientId) {\n  if (!byClient.has(clientId)) {\n    byClient.set(clientId, {\n      client_id: clientId,\n      client_name: 'Cliente',\n      message_content: '',\n      memoria_cliente: null,\n      mensagens_recentes: [],\n      historico_similar: [],\n      knowledge_base: [],\n      normalized: {},\n      config: {},\n      meta: {},\n    });\n  }\n  return byClient.get(clientId);\n}\n\nfor (const item of memoriaItems) {\n  const clientId = item.json?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.memoria_cliente = item.json;\n  target.client_name = item.json?.client_name || target.client_name;\n  target.message_content = item.json?.message_content || target.message_content;\n  target.normalized = item.json?.normalized || target.normalized;\n  target.config = item.json?.config || target.config;\n  target.meta = item.json?.meta || target.meta;\n}\n\nfor (const item of mensagensItems) {\n  const clientId = item.json?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.mensagens_recentes.push(item.json);\n  if (!target.message_content) {\n    target.message_content = item.json?.content || '';\n  }\n}\n\nfor (const item of historicoItems) {\n  const clientId = item.json?.client_id || item.json?.matches?.[0]?.metadata?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.historico_similar = item.json?.matches || target.historico_similar;\n}\n\nfor (const item of kbItems) {\n  const clientId = item.json?.client_id || item.json?.matches?.[0]?.metadata?.client_id;\n  if (!clientId) continue;\n  const target = ensure(clientId);\n  target.knowledge_base = item.json?.matches || target.knowledge_base;\n}\n\nreturn Array.from(byClient.values()).map((json) => ({ json }));"
+      },
+      "id": "5a02f535-bbd2-4cfd-90d7-db429cb64c41",
+      "name": "Merge Contextos",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notesInFlow": "UPDATED v5.009: Robustez contra falhas de input",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f798a00a-c8e1-4abe-bf0a-ee0272514b8c",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2b89fc0c-cdaf-402e-b5b9-be0d1684064b",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "784e7dfe-0580-49a6-9cdd-52560e318f35",
+                    "leftValue": "={{$json.event?.messages ? 'message' : $json.event?.statuses ? 'status' : 'other'}}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -896,
+        736
+      ],
+      "id": "036a9291-89d6-4080-a4e2-6fee14b3785e",
+      "name": "Roteamento Evento"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "250284d5-0b71-462d-912f-793b1927ddda",
+                    "leftValue": "={{$json.signature?.valid ? 'valid' : 'invalid'}}",
+                    "rightValue": "valid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e54d94cd-c9a6-4b5a-b7f8-0bc007acc070",
+                    "leftValue": "={{$json.signature?.valid ? 'valid' : 'invalid'}}",
+                    "rightValue": "invalid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1120,
+        960
+      ],
+      "id": "f2ee8bf6-9f90-42fd-931c-45c01ad37a15",
+      "name": "Roteamento Assinatura"
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.raw_body || '' }}",
+        "dataPropertyName": "expected_signature_hmac",
+        "secret": "={{ $json.config.app_secret || $env.META_APP_SECRET || '' }}"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -1568,
+        960
+      ],
+      "id": "0416d5e1-4c04-45e8-8f17-373daea46803",
+      "name": "Crypto"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ {\n  \"config\": {\n    \"verify_token\": $env.META_VERIFY_TOKEN,\n    \"access_token\": $env.META_ACCESS_TOKEN,\n    \"phone_number_id\": $env.META_PHONE_NUMBER_ID,\n    \"waba_id\": $env.META_WABA_ID,\n    \"app_id\": $env.META_APP_ID,\n    \"app_secret\": $env.META_APP_SECRET || $env.META_APP_SECRET_FALLBACK || '',\n    \"meta_env\": $env.META_ENV || 'production',\n    \"graph_version\": $env.META_GRAPH_VERSION || 'v20.0',\n    \"base_url\": $env.META_BASE_URL || ''\n  }\n} }}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2240,
+        864
+      ],
+      "id": "fbd06ebd-11a1-49dd-a234-396a8e2cdccd",
+      "name": "Carregar Config Meta"
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex",
+        "options": {}
+      },
+      "id": "901e05d6-3321-4677-8d86-8f33ce7fecd5",
+      "name": "Merge Memoria + Contexto",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-large\",\n  \"input\": \"={{ $json.embedding_input || $json.message_content || $json.normalized?.text || $json.content || '' }}\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -208,
+        496
+      ],
+      "id": "f31b2d06-6dc6-4511-aed4-e94aaf4a2082",
+      "name": "HTTP Request",
+      "credentials": {
+        "openAiApi": {
+          "id": "LOwxrksAXBMCkhXE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const emb = $json.data?.[0]?.embedding || [];\nreturn [{ json: { ...$json, embedding: emb } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        496
+      ],
+      "id": "015ffece-e9d5-44d9-ad2c-426739e1636f",
+      "name": "Function"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "Voc\u00ea \u00e9 Maurylio Honorio, especialista s\u00eanior em programa\u00e7\u00e3o automotiva, com 15+ anos em:\n- diagn\u00f3stico avan\u00e7ado;\n- imobilizadores, chaves e ECUs (euro/US/asia);\n- protocolos CAN/LIN/K-line;\n- leitura/escrita EEPROM/Flash;\n- uso de scanners OEM e universais.\n\nSeu papel: dar suporte t\u00e9cnico remoto a profissionais automotivos (chaveiros, autoel\u00e9tricas, mec\u00e2nicas), ajudando a:\n- entender o problema;\n- formular hip\u00f3teses;\n- definir testes objetivos;\n- sugerir procedimentos SEGUROS.\n\nREGRAS DE RESPOSTA:\n- Sempre responda em PT-BR, de forma curta, objetiva, cordial e did\u00e1tica.\n- Prefira listas e passos numerados (checklists).\n- Primeiro confirme o entendimento em 1\u20132 frases.\n- Se faltarem dados cr\u00edticos, PE\u00c7A antes de dar passo a passo. Solicite, quando necess\u00e1rio:\n  - modelo/ano/motoriza\u00e7\u00e3o;\n  - sistema envolvido (ECU motor, BCM, painel, imobilizador, chave, TCU, etc.);\n  - sintomas detalhados;\n  - ferramentas dispon\u00edveis (scanner, programador EEPROM/Flash, fonte, etc.);\n  - hist\u00f3rico de interven\u00e7\u00f5es anteriores.\n\nFLUXO B\u00c1SICO:\n1) Resuma o caso.\n2) Liste 1\u20133 hip\u00f3teses (como hip\u00f3teses, n\u00e3o certezas).\n3) Para cada hip\u00f3tese, sugira testes claros em checklist.\n4) S\u00f3 depois, proponha procedimentos em passos numerados, se forem seguros.\n\nSEGURAN\u00c7A (OBRIGAT\u00d3RIO):\n- Sempre que envolver escrita em EEPROM/Flash, virginiza\u00e7\u00e3o/reparo de ECU, reset/adapta\u00e7\u00e3o de imobilizador, telecodifica\u00e7\u00e3o ou atualiza\u00e7\u00e3o de software:\n  - exija BACKUP completo do arquivo original antes de qualquer escrita;\n  - inclua um alerta come\u00e7ando com:\n    \"\u26a0\ufe0f Aten\u00e7\u00e3o: ...\" explicando riscos (brick de ECU, perda de sincronismo, bloqueio de imobilizador, perda de c\u00f3digos, necessidade de equipamento OEM etc.).\n- Nunca invente ferramentas, esquemas, pinos, endere\u00e7os, senhas ou procedimentos. \n- Se n\u00e3o houver dados suficientes ou n\u00e3o souber, diga claramente que n\u00e3o \u00e9 poss\u00edvel orientar com seguran\u00e7a e indique quais informa\u00e7\u00f5es faltam.\n\nFORMATO SUGERIDO DE SA\u00cdDA:\n1. Resumo do caso.\n2. Dados faltantes (se houver).\n3. Hip\u00f3teses.\n4. Testes recomendados (checklist).\n5. Procedimentos sugeridos (se seguro).\n6. Alertas de risco/backup (quando aplic\u00e1vel).\n\nEvite frases de encerramento gen\u00e9ricas. Sempre indique o que o usu\u00e1rio deve medir/testar ou informar na pr\u00f3xima mensagem (ex.: DTCs, tens\u00f5es, resultado da leitura, comportamento ap\u00f3s o teste).\n"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "9ce07ea9-59e2-4621-a8f1-5466f26cbbc7",
+      "name": "GPT-4: Gerar Resposta",
+      "credentials": {
+        "openAiApi": {
+          "id": "LOwxrksAXBMCkhXE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const json = $json || {};\nconst normalized = json.normalized || {};\nconst messageType = String(json.message_type || normalized.type || 'text').toLowerCase();\nconst content = json.message_content || normalized.text || '';\nconst graphVersion = (normalized.config?.graph_version || normalized.config?.meta_graph_version || 'v20.0');\nconst mediaId = normalized.raw?.document?.id || normalized.raw?.image?.id || normalized.raw?.video?.id || normalized.raw?.audio?.id || normalized.raw?.sticker?.id || json.media_id || '';\n\n// Prioridade de entrada para embedding\nlet embeddingInput = normalized.transcription || normalized.caption || normalized.text || content || '';\nif (!embeddingInput && messageType !== 'text') {\n  embeddingInput = `[${messageType}]`;\n}\nembeddingInput = embeddingInput.slice(0, 4000);\n\nconst media = {\n  media_type: messageType,\n  media_id: mediaId,\n  media_url: normalized.media_url || '',\n  embedding_input: embeddingInput,\n};\n\nreturn [{ json: { ...json, normalized: { ...normalized, ...media }, embedding_input: embeddingInput } }];\n"
+      },
+      "id": "65553a18-e101-4885-9f97-45900d46e861",
+      "name": "Enriquecer Midia",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gynprog_support.messages \n(client_id, content, derived_text, direction, channel, message_type, message_id, media_type, media_id, timestamp)\nVALUES (\n  '{{$json.client_id || ''}}',\n  '{{$json.message_content || ''}}',\n  '{{$json.embedding_input || $json.normalized?.embedding_input || $json.message_content || ''}}',\n  'inbound',\n  'whatsapp:meta',\n  '{{$json.message_type || $json.normalized?.media_type || 'text'}}',\n  '{{$json.message_id || $json.normalized?.message_id || ''}}',\n  '{{$json.normalized?.media_type || $json.message_type || 'text'}}',\n  '{{$json.normalized?.media_id || ''}}',\n  COALESCE(NULLIF('{{$json.timestamp || ''}}',''), NOW())\n)\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "id": "5412ddd0-98c0-45d3-b982-60bfe0b32603",
+      "name": "PostgreSQL: Salvar Mensagem Inbound",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        352
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "postgres": {
+            "id": "3ZWnI2rLcKXLdjEA",
+            "name": "Postgres account"
+          }
+        }
+      },
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/speech",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Authorization\": `Bearer ${$env.OPENAI_API_KEY || ''}` ,\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": $env.TTS_MODEL || \"tts-1-hd\",\n  \"voice\": $env.TTS_VOICE || \"alloy\",\n  \"format\": \"mp3\",\n  \"input\": $json.gpt_text || $json.message?.content || ''\n}\n",
+        "responseFormat": "file",
+        "dataPropertyName": "audio",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "d04f18ed-8614-47e4-875f-1a4fcf421dcf",
+      "name": "TTS: Gerar Audio (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        -80
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = $input.item;\nconst json = item.json || {};\nconst binary = item.binary || {};\nconst audio = binary.audio;\nif (audio) {\n  json.tts_audio_base64 = audio.data;\n  json.tts_audio_mime = audio.mimeType || 'audio/mpeg';\n  const cdn = $env.TTS_CDN_BASE_URL || '';\n  if (cdn) {\n    const stamp = Date.now();\n    json.tts_audio_url = `${cdn}/tts_${stamp}.mp3`;\n  }\n}\nreturn [{ json, binary }];\n"
+      },
+      "id": "fb07959a-2270-4dca-86e8-c1223077efda",
+      "name": "TTS: Preparar Saida",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -80
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "3ce23843-5b2c-4fe9-a825-fa4db9c06785",
+              "leftValue": "={{$json.normalized?.media_id || ''}}",
+              "operator": {
+                "operation": "notEmpty",
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "69754617-2903-4ba0-bb3a-117e41b1a1ee",
+      "name": "If: Tem Midia",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ `https://graph.facebook.com/${$json.normalized?.config?.graph_version || 'v20.0'}/${$json.normalized?.media_id}` }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{$json.normalized?.config?.access_token || $json.config?.access_token || $env.META_ACCESS_TOKEN}}"
+            }
+          ]
+        },
+        "options": {
+          "followRedirect": true
+        }
+      },
+      "id": "9d525513-a212-44a8-a525-cf97fcf04a22",
+      "name": "Meta: Obter Media URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -208,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url || $json.download_url || $json.data?.url || '' }}",
+        "responseFormat": "file",
+        "dataPropertyName": "media",
+        "options": {
+          "followRedirect": true,
+          "timeout": 20000
+        }
+      },
+      "id": "af445ca0-a5e7-4dab-b559-f65a05166a3a",
+      "name": "Baixar Midia (Binary)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        32,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "const json = $json || {};\nconst mediaType = String(json.normalized?.media_type || json.message_type || '').toLowerCase();\nconst isAudio = ['audio','voice','ptt','ptv'].includes(mediaType);\nconst isImage = mediaType === 'image';\nconst isVideo = mediaType === 'video';\nconst isSticker = mediaType === 'sticker';\nreturn [{ json: { ...json, media_flags: { isAudio, isImage, isVideo, isSticker } } }];\n"
+      },
+      "id": "126cdd94-85a4-4658-9c40-88bdafaa21d9",
+      "name": "Marcar Tipo Midia",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        256,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "0ef7e8dd-558a-4d13-8d0b-a6da71dfc8d3",
+              "leftValue": "={{$json.media_flags?.isAudio ? 'audio' : ''}}",
+              "operator": {
+                "operation": "equals",
+                "type": "string"
+              },
+              "rightValue": "audio"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "c08ef0e4-b478-4158-8310-bfe7593b6ef1",
+      "name": "If: Tipo Audio",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBinaryData": true,
+        "binaryPropertyName": "media",
+        "sendBody": true,
+        "specifyBody": "form-data",
+        "formDataParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "pt"
+            },
+            {
+              "name": "response_format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b79cd7fe-14f2-47d2-b5c2-58931f2f3483",
+      "name": "Transcrever Audio (Whisper)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        704,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "const json = $json || {};\nconst text = json.text || json.text?.trim ? json.text : json.text;\nconst transcription = typeof json.text === 'string' ? json.text : json.text?.text || json.text?.transcript || '';\nconst embedding_input = transcription || json.embedding_input || json.normalized?.text || json.message_content || '';\nreturn [{ json: { ...json, transcription, embedding_input } }];\n"
+      },
+      "id": "ebb3f48f-cdbd-4d4b-9852-00747ba313c2",
+      "name": "Aplicar Transcricao",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        928,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Meta: Webhook": {
+      "main": [
+        [
+          {
+            "node": "Carregar Config Meta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Carregar Config Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Evento Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Evento Meta": {
+      "main": [
+        [
+          {
+            "node": "Crypto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Assinatura": {
+      "main": [
+        [
+          {
+            "node": "Roteamento Assinatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Enriquecer Midia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Check": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL: Buscar Memoria",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PostgreSQL: Mensagens Recentes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge GPT + Contexto",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "PostgreSQL: Buscar Memoria": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4: Atualizar Memoria": {
+      "main": [
+        [
+          {
+            "node": "Merge Memoria + Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Memoria JSON": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL: Salvar Memoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Empacotar Resposta GPT": {
+      "main": [
+        [
+          {
+            "node": "TTS: Gerar Audio (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge GPT + Contexto": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Memoria + Contexto",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "GPT-4: Atualizar Memoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Meta: Enviar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta: Enviar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assinatura Invalida": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Status": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento Desconhecido": {
+      "main": [
+        [
+          {
+            "node": "Calcular Latencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Latencia": {
+      "main": [
+        [
+          {
+            "node": "Registrar Metricas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Metricas": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler v5.009": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Contextos": {
+      "main": [
+        [
+          {
+            "node": "GPT-4: Gerar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roteamento Evento": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processar Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evento Desconhecido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roteamento Assinatura": {
+      "main": [
+        [
+          {
+            "node": "Roteamento Evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assinatura Invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto": {
+      "main": [
+        [
+          {
+            "node": "Validar Assinatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carregar Config Meta": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Memoria + Contexto": {
+      "main": [
+        [
+          {
+            "node": "Processar Memoria JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function": {
+      "main": [
+        [
+          {
+            "node": "Pinecone: Historico (HTTP)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pinecone: Knowledge Base (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4: Gerar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Empacotar Resposta GPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone: Historico (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Pinecone: Knowledge Base (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Enriquecer Midia": {
+      "main": [
+        [
+          {
+            "node": "If: Tem Midia",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PostgreSQL: Salvar Mensagem Inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL: Mensagens Recentes": {
+      "main": [
+        [
+          {
+            "node": "Merge Contextos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "PostgreSQL: Salvar Mensagem Inbound": {
+      "main": [
+        []
+      ]
+    },
+    "TTS: Gerar Audio (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "TTS: Preparar Saida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TTS: Preparar Saida": {
+      "main": [
+        [
+          {
+            "node": "Merge GPT + Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Tem Midia": {
+      "main": [
+        [
+          {
+            "node": "Meta: Obter Media URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rate Limit Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta: Obter Media URL": {
+      "main": [
+        [
+          {
+            "node": "Baixar Midia (Binary)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar Midia (Binary)": {
+      "main": [
+        [
+          {
+            "node": "Marcar Tipo Midia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Tipo Midia": {
+      "main": [
+        [
+          {
+            "node": "If: Tipo Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Tipo Audio": {
+      "main": [
+        [
+          {
+            "node": "Transcrever Audio (Whisper)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rate Limit Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcrever Audio (Whisper)": {
+      "main": [
+        [
+          {
+            "node": "Aplicar Transcricao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aplicar Transcricao": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f2f0c607-5cb6-4bed-8fba-0e5a12d80436",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ff86a5bee6b26a4fe33e10fc3cf5e69a885b4933737382188c57b9f1d85f558c"
+  },
+  "id": "MndWNyiNs1v4ahb4",
+  "tags": []
+}
