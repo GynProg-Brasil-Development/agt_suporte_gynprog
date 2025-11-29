@@ -1,5 +1,5 @@
 {
-  "name": "agt_suporte_gynprog_v5.011",
+  "name": "agt_suporte_gynprog_v5.012",
   "nodes": [
     {
       "parameters": {
@@ -60,7 +60,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  \"vector\": $json.embedding || [],\n  \"topK\": 3,\n  \"namespace\": \"client_history\",\n  \"filter\": $json.client_id ? { \"client_id\": $json.client_id } : undefined,\n  \"includeMetadata\": true\n} }}",
+        "jsonBody": "={{ {\n  \"vector\": $json.embedding || [],\n  \"topK\": 3,\n  \"namespace\": \"client_history\",\n  \"filter\": $json.client_id ? { \"client_id\": $json.client_id } : null,\n  \"includeMetadata\": true\n} }}",
         "options": {}
       },
       "id": "5c170be1-c78f-482b-a309-d735a6ca78e5",
@@ -843,7 +843,7 @@
         "nodeCredentialType": "openAiApi",
         "sendHeaders": true,
         "specifyHeaders": "json",
-        "jsonHeaders": "={\n  \"Authorization\": `Bearer ${$env.OPENAI_API_KEY || ''}` ,\n  \"Content-Type\": \"application/json\"\n}\n",
+        "jsonHeaders": "={\n  \"Authorization\": \"Bearer {{$env.OPENAI_API_KEY}}\",\n  \"Content-Type\": \"application/json\"\n}\n",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"model\": $env.TTS_MODEL || \"tts-1-hd\",\n  \"voice\": $env.TTS_VOICE || \"alloy\",\n  \"format\": \"mp3\",\n  \"input\": $json.gpt_text || $json.message?.content || ''\n}\n",
@@ -889,6 +889,7 @@
               "id": "3ce23843-5b2c-4fe9-a825-fa4db9c06785",
               "leftValue": "={{$json.normalized?.media_id || ''}}",
               "operator": {
+                "name": "filter.operator.notEmpty",
                 "operation": "notEmpty",
                 "type": "string"
               },
@@ -993,6 +994,7 @@
               "id": "0ef7e8dd-558a-4d13-8d0b-a6da71dfc8d3",
               "leftValue": "={{$json.media_flags?.isAudio ? 'audio' : ''}}",
               "operator": {
+                "name": "filter.operator.equals",
                 "operation": "equals",
                 "type": "string"
               },
